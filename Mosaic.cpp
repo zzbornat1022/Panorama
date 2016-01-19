@@ -51,7 +51,7 @@ void CMosaic::SetBackgroundColor( IplImage* pImg, int iColor )
 	memset( pImg->imageData, iColor, pImg->widthStep*pImg->height );
 }
 
-void CMosaic::StickFirstFrame ( IplImage* pFirstFrame, point ptPosition, IplImage* pPanorama )
+void CMosaic::StickFirstFrame ( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama )
 {
 	CvRect rectPanoramaROI = cvRect( ptPosition.x, ptPosition.y, pFirstFrame->width, pFirstFrame->height ); 
 	cvSetImageROI( pPanorama, rectPanoramaROI );

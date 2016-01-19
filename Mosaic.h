@@ -24,11 +24,11 @@ private:
 	int m_iPanoramaPreWidth;
 	int m_iPanoramaPreHeight;
 
-	point m_ptFirstFramePosition;
+	CvPoint m_ptFirstFramePosition;
 
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
-	void StickFirstFrame ( IplImage* pFirstFrame, point ptPosition, IplImage* pPanorama );
+	void StickFirstFrame ( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
 };
 
