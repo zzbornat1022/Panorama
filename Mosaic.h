@@ -2,12 +2,6 @@
 
 #include <opencv2/opencv.hpp>
 
-struct point
-{
-	int x;
-	int y;
-};
-
 class CMosaic
 {
 public:
