@@ -195,7 +195,7 @@ private:
 	void interp_hist_entry( double*** hist, double rbin, double cbin, double obin, double mag, int d, int n );
 	void hist_to_descr( double*** hist, int d, int n, struct feature* feat );
 	void normalize_descr( struct feature* feat );
-	int feature_cmp( void* feat1, void* feat2, void* param );
+	static int feature_cmp( void* feat1, void* feat2, void* param );
 	void release_descr_hist( double**** hist, int d );
 	void release_pyr( IplImage**** pyr, int octvs, int n );
 };

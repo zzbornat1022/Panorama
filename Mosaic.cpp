@@ -115,7 +115,7 @@ int CMosaic::_sift_features( IplImage* img, struct feature** feat, int intvls,
 
 	/* build scale space pyramid; smallest dimension of top level is ~4 pixels */
 	init_img = create_init_img( img, img_dbl, sigma );
-	octvs = log( MIN( init_img->width, init_img->height ) ) / log(2) - 2;
+	octvs = log( (double) ( MIN( init_img->width, init_img->height ) ) ) / log( (double) 2 ) - 2;
 	gauss_pyr = build_gauss_pyr( init_img, octvs, intvls, sigma );
 	dog_pyr = build_dog_pyr( gauss_pyr, octvs, intvls );
   
@@ -130,8 +130,8 @@ int CMosaic::_sift_features( IplImage* img, struct feature** feat, int intvls,
 	/* sort features by decreasing scale and move from CvSeq to array */
 	cvSeqSort( features, (CvCmpFunc)feature_cmp, NULL );
 	n = features->total;
-	*feat = calloc( n, sizeof(struct feature) );
-	*feat = cvCvtSeqToArray( features, *feat, CV_WHOLE_SEQ );
+	*feat = (feature*) calloc( n, sizeof(struct feature) );
+	*feat = (feature*) cvCvtSeqToArray( features, *feat, CV_WHOLE_SEQ );
 	for( i = 0; i < n; i++ )
 	{
 		free( (*feat)[i].feature_data );
@@ -189,7 +189,7 @@ IplImage* CMosaic::convert_to_gray32( IplImage* img )
 
 	gray32 = cvCreateImage( cvGetSize(img), IPL_DEPTH_32F, 1 );
 	if( img->nChannels == 1 )
-		gray8 = cvClone( img );
+		gray8 = (IplImage*) cvClone( img );
 	else
 	{
 		gray8 = cvCreateImage( cvGetSize(img), IPL_DEPTH_8U, 1 );
@@ -216,12 +216,13 @@ IplImage*** CMosaic::build_gauss_pyr( IplImage* base, int octvs, int intvls, dou
 {
 	IplImage*** gauss_pyr;
 	const int _intvls = intvls;
-	double sig[_intvls+3], sig_total, sig_prev, k;
+	double* sig = (double*) calloc ( intvls + 3, sizeof(double) );
+	double sig_total, sig_prev, k;
 	int i, o;
 
-	gauss_pyr = calloc( octvs, sizeof( IplImage** ) );
+	gauss_pyr = (IplImage***) calloc( octvs, sizeof( IplImage** ) );
 	for( i = 0; i < octvs; i++ )
-		gauss_pyr[i] = calloc( intvls + 3, sizeof( IplImage *) );
+		gauss_pyr[i] = (IplImage**) calloc( intvls + 3, sizeof( IplImage *) );
 
   /*
     precompute Gaussian sigmas using the following formula:
@@ -255,7 +256,8 @@ IplImage*** CMosaic::build_gauss_pyr( IplImage* base, int octvs, int intvls, dou
 				cvSmooth( gauss_pyr[o][i-1], gauss_pyr[o][i], CV_GAUSSIAN, 0, 0, sig[i], sig[i] );
 			}
 		}
-
+	
+	free(sig);
 	return gauss_pyr;
 }
 
@@ -292,9 +294,9 @@ IplImage*** CMosaic::build_dog_pyr( IplImage*** gauss_pyr, int octvs, int intvls
 	IplImage*** dog_pyr;
 	int i, o;
 
-	dog_pyr = calloc( octvs, sizeof( IplImage** ) );
+	dog_pyr = (IplImage***) calloc( octvs, sizeof( IplImage** ) );
 	for( i = 0; i < octvs; i++ )
-		dog_pyr[i] = calloc( intvls + 2, sizeof(IplImage*) );
+		dog_pyr[i] = (IplImage**) calloc( intvls + 2, sizeof(IplImage*) );
 
 	for( o = 0; o < octvs; o++ )
 		for( i = 0; i < intvls + 2; i++ )
@@ -354,6 +356,7 @@ CvSeq* CMosaic::scale_space_extrema( IplImage*** dog_pyr, int octvs, int intvls,
 							}
 						}
 				}
+
 	return features;
 }
 
@@ -622,9 +625,9 @@ feature* CMosaic::new_feature( void )
 	struct feature* feat;
 	struct detection_data* ddata;
 
-	feat = malloc( sizeof( struct feature ) );
+	feat = (feature*) malloc( sizeof( struct feature ) );
 	memset( feat, 0, sizeof( struct feature ) );
-	ddata = malloc( sizeof( struct detection_data ) );
+	ddata = (detection_data*) malloc( sizeof( struct detection_data ) );
 	memset( ddata, 0, sizeof( struct detection_data ) );
 	feat->feature_data = ddata;
 	feat->type = FEATURE_LOWE;
@@ -733,7 +736,7 @@ void CMosaic::calc_feature_oris( CvSeq* features, IplImage*** gauss_pyr )
 
 	for( i = 0; i < n; i++ )
     {
-		feat = malloc( sizeof( struct feature ) );
+		feat = (feature*) malloc( sizeof( struct feature ) );
 		cvSeqPopFront( features, feat );
 		ddata = feat_detection_data( feat );
 		hist = ori_hist( gauss_pyr[ddata->octv][ddata->intvl],
@@ -769,7 +772,7 @@ double* CMosaic::ori_hist( IplImage* img, int r, int c, int n, int rad, double s
 	double mag, ori, w, exp_denom, PI2 = CV_PI * 2.0;
 	int bin, i, j;
 
-	hist = calloc( n, sizeof( double ) );
+	hist = (double*) calloc( n, sizeof( double ) );
 	exp_denom = 2.0 * sigma * sigma;
 	for( i = -rad; i <= rad; i++ )
 		for( j = -rad; j <= rad; j++ )
@@ -956,12 +959,12 @@ double*** CMosaic::descr_hist( IplImage* img, int r, int c, double ori, double s
 	double cos_t, sin_t, hist_width, exp_denom, r_rot, c_rot, grad_mag, grad_ori, w, rbin, cbin, obin, bins_per_rad, PI2 = 2.0 * CV_PI;
 	int radius, i, j;
 
-	hist = calloc( d, sizeof( double** ) );
+	hist = (double***) calloc( d, sizeof( double** ) );
 	for( i = 0; i < d; i++ )
     {
-		hist[i] = calloc( d, sizeof( double* ) );
+		hist[i] = (double**) calloc( d, sizeof( double* ) );
 		for( j = 0; j < d; j++ )
-			hist[i][j] = calloc( n, sizeof( double ) );
+			hist[i][j] = (double*) calloc( n, sizeof( double ) );
 	}
   
 	cos_t = cos( ori );
@@ -969,7 +972,7 @@ double*** CMosaic::descr_hist( IplImage* img, int r, int c, double ori, double s
 	bins_per_rad = n / PI2;
 	exp_denom = d * d * 0.5;
 	hist_width = SIFT_DESCR_SCL_FCTR * scl;
-	radius = hist_width * sqrt(2) * ( d + 1.0 ) * 0.5 + 0.5;
+	radius = hist_width * sqrt( (double) 2) * ( d + 1.0 ) * 0.5 + 0.5;
 	for( i = -radius; i <= radius; i++ )
 		for( j = -radius; j <= radius; j++ )
 		{
