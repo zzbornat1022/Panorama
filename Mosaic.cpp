@@ -28,6 +28,10 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	// Set panorama background color to black
 	SetBackgroundColor( m_pPanorama, 0 );
 
+	/*feature* feat;
+	int iFeatureNum = sift_features( pImages[0], &feat );
+	draw_features( pImages[0], feat, iFeatureNum );*/
+
 	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
 	m_ptFirstFramePosition.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
 	m_ptFirstFramePosition.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
@@ -1174,4 +1178,145 @@ void CMosaic::release_pyr( IplImage**** pyr, int octvs, int n )
     }
 	free( *pyr );
 	*pyr = NULL;
+}
+
+/*
+  Draws a set of features on an image
+  
+  @param img image on which to draw features
+  @param feat array of Oxford-type features
+  @param n number of features
+*/
+void CMosaic::draw_features( IplImage* img, struct feature* feat, int n )
+{
+  int type;
+
+  if( n <= 0  ||  ! feat )
+    {
+      fprintf( stderr, "Warning: no features to draw, %s line %d\n",
+	       __FILE__, __LINE__ );
+      return;
+    }
+  type = feat[0].type;
+  switch( type )
+    {
+    case FEATURE_OXFD:
+      draw_oxfd_features( img, feat, n );
+      break;
+    case FEATURE_LOWE:
+      draw_lowe_features( img, feat, n );
+      break;
+    default:
+      fprintf( stderr, "Warning: draw_features(): unrecognized feature" \
+	       " type, %s, line %d\n", __FILE__, __LINE__ );
+      break;
+    }
+}
+
+/*
+  Draws Oxford-type affine features
+  
+  @param img image on which to draw features
+  @param feat array of Oxford-type features
+  @param n number of features
+*/
+void CMosaic::draw_oxfd_features( IplImage* img, struct feature* feat, int n )
+{
+	CvScalar color = CV_RGB( 255, 255, 255 );
+	int i;
+
+	if( img-> nChannels > 1 )
+		color = FEATURE_OXFD_COLOR;
+	for( i = 0; i < n; i++ )
+		draw_oxfd_feature( img, feat + i, color );
+}
+
+/*
+  Draws a single Oxford-type feature
+
+  @param img image on which to draw
+  @param feat feature to be drawn
+  @param color color in which to draw
+*/
+void CMosaic::draw_oxfd_feature( IplImage* img, struct feature* feat, CvScalar color )
+{
+	double m[4] = { feat->a, feat->b, feat->b, feat->c };
+	double v[4] = { 0 };
+	double e[2] = { 0 };
+	CvMat M, V, E;
+	double alpha, l1, l2;
+
+	/* compute axes and orientation of ellipse surrounding affine region */
+	cvInitMatHeader( &M, 2, 2, CV_64FC1, m, CV_AUTOSTEP );
+	cvInitMatHeader( &V, 2, 2, CV_64FC1, v, CV_AUTOSTEP );
+	cvInitMatHeader( &E, 2, 1, CV_64FC1, e, CV_AUTOSTEP );
+	cvEigenVV( &M, &V, &E, DBL_EPSILON, 0, 0 );
+	l1 = 1 / sqrt( e[1] );
+	l2 = 1 / sqrt( e[0] );
+	alpha = -atan2( v[1], v[0] );
+	alpha *= 180 / CV_PI;
+
+	cvEllipse( img, cvPoint( feat->x, feat->y ), cvSize( l2, l1 ), alpha, 0, 360, CV_RGB(0,0,0), 3, 8, 0 );
+	cvEllipse( img, cvPoint( feat->x, feat->y ), cvSize( l2, l1 ), alpha, 0, 360, color, 1, 8, 0 );
+	cvLine( img, cvPoint( feat->x+2, feat->y ), cvPoint( feat->x-2, feat->y ), color, 1, 8, 0 );
+	cvLine( img, cvPoint( feat->x, feat->y+2 ), cvPoint( feat->x, feat->y-2 ), color, 1, 8, 0 );
+}
+
+/*
+  Draws Lowe-type features
+  
+  @param img image on which to draw features
+  @param feat array of Oxford-type features
+  @param n number of features
+*/
+void CMosaic::draw_lowe_features( IplImage* img, struct feature* feat, int n )
+{
+	CvScalar color = CV_RGB( 255, 255, 255 );
+	int i;
+
+	if( img-> nChannels > 1 )
+		color = FEATURE_LOWE_COLOR;
+	for( i = 0; i < n; i++ )
+		draw_lowe_feature( img, feat + i, color );
+}
+
+
+
+/*
+  Draws a single Lowe-type feature
+
+  @param img image on which to draw
+  @param feat feature to be drawn
+  @param color color in which to draw
+*/
+void CMosaic::draw_lowe_feature( IplImage* img, struct feature* feat, CvScalar color )
+{
+	int len, hlen, blen, start_x, start_y, end_x, end_y, h1_x, h1_y, h2_x, h2_y;
+	double scl, ori;
+	double scale = 5.0;
+	double hscale = 0.75;
+	CvPoint start, end, h1, h2;
+
+	/* compute points for an arrow scaled and rotated by feat's scl and ori */
+	start_x = cvRound( feat->x );
+	start_y = cvRound( feat->y );
+	scl = feat->scl;
+	ori = feat->ori;
+	len = cvRound( scl * scale );
+	hlen = cvRound( scl * hscale );
+	blen = len - hlen;
+	end_x = cvRound( len *  cos( ori ) ) + start_x;
+	end_y = cvRound( len * -sin( ori ) ) + start_y;
+	h1_x = cvRound( blen *  cos( ori + CV_PI / 18.0 ) ) + start_x;
+	h1_y = cvRound( blen * -sin( ori + CV_PI / 18.0 ) ) + start_y;
+	h2_x = cvRound( blen *  cos( ori - CV_PI / 18.0 ) ) + start_x;
+	h2_y = cvRound( blen * -sin( ori - CV_PI / 18.0 ) ) + start_y;
+	start = cvPoint( start_x, start_y );
+	end = cvPoint( end_x, end_y );
+	h1 = cvPoint( h1_x, h1_y );
+	h2 = cvPoint( h2_x, h2_y );
+
+	cvLine( img, start, end, color, 1, 8, 0 );
+	cvLine( img, end, h1, color, 1, 8, 0 );
+	cvLine( img, end, h2, color, 1, 8, 0 );
 }

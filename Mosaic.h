@@ -198,4 +198,10 @@ private:
 	static int feature_cmp( void* feat1, void* feat2, void* param );
 	void release_descr_hist( double**** hist, int d );
 	void release_pyr( IplImage**** pyr, int octvs, int n );
+
+	void draw_features( IplImage* img, struct feature* feat, int n );
+	void draw_oxfd_features( IplImage* img, struct feature* feat, int n );
+	void draw_oxfd_feature( IplImage* img, struct feature* feat, CvScalar color );
+	void draw_lowe_features( IplImage* img, struct feature* feat, int n );
+	void draw_lowe_feature( IplImage* img, struct feature* feat, CvScalar color );
 };
