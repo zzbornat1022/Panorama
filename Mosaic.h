@@ -95,6 +95,15 @@ enum feature_match_type
 
 /******************************** Structures *********************************/
 
+/** vertex coord */
+struct vertex_coord 
+{
+	CvPoint left_bottom_vertex;
+	CvPoint left_top_vertex;
+	CvPoint right_top_vertex;
+	CvPoint right_bottom_vertex;
+};
+
 /** holds feature data relevant to detection */
 struct detection_data
 {
@@ -141,11 +150,6 @@ public:
 
 	IplImage* Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth, int iFrameHeight, int iPanoramaWidth, int iPanoramaHeight );
 
-	static __inline float pixval32f( IplImage* img, int r, int c )
-	{
-		return ( (float*)(img->imageData + img->widthStep*r) )[c];
-	}
-
 private:
 
 	// TODO: release
@@ -154,7 +158,7 @@ private:
 	int m_iPanoramaPreWidth;
 	int m_iPanoramaPreHeight;
 
-	CvPoint m_ptFirstFramePosition;
+	CvPoint m_ptFirstFrameLeftBottomVertex;
 
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
@@ -163,9 +167,12 @@ private:
 
 	/*********************** Functions prototyped in opensift **********************/
 	int sift_features( IplImage* img, struct feature** feat );
-	int _sift_features( IplImage* img, struct feature** feat, int intvls,
-		double sigma, double contr_thr, int curv_thr,
-		int img_dbl, int descr_width, int descr_hist_bins );
+	int _sift_features( IplImage* img, struct feature** feat, int intvls, double sigma, double contr_thr, int curv_thr, int img_dbl, int descr_width, int descr_hist_bins );
+
+	static __inline float pixval32f( IplImage* img, int r, int c )
+	{
+		return ( (float*)(img->imageData + img->widthStep*r) )[c];
+	}
 
 	IplImage* create_init_img( IplImage*, int, double );
 	IplImage* convert_to_gray32( IplImage* );

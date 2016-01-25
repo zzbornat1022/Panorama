@@ -6,8 +6,8 @@ CMosaic::CMosaic(void)
 {
 	m_iPanoramaPreWidth = 0;
 	m_iPanoramaPreHeight = 0;
-	m_ptFirstFramePosition.x = 0;
-	m_ptFirstFramePosition.y = 0;
+	m_ptFirstFrameLeftBottomVertex.x = 0;
+	m_ptFirstFrameLeftBottomVertex.y = 0;
 }
 
 CMosaic::~CMosaic(void)
@@ -33,9 +33,9 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	draw_features( pImages[0], feat, iFeatureNum );*/
 
 	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
-	m_ptFirstFramePosition.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
-	m_ptFirstFramePosition.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
-	StickFirstFrame( pImages[0], m_ptFirstFramePosition, m_pPanorama );
+	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
+	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
+	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
 
 	return m_pPanorama;
 }
