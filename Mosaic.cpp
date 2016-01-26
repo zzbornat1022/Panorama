@@ -28,12 +28,12 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	// Set panorama background color to black
 	SetBackgroundColor( m_pPanorama, 0 );
 
-	feature* feat1, * feat2;
-	int iFeature1Num = sift_features( pImages[0], &feat1 );
-	int iFeature2Num = sift_features( pImages[1], &feat2 );
-	int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
-	IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], feat1, iFeature1Num );
-	cvShowImage( "Stacked Image", pStackedImg );
+	//feature* feat1, * feat2;
+	//int iFeature1Num = sift_features( pImages[0], &feat1 );
+	//int iFeature2Num = sift_features( pImages[1], &feat2 );
+	//int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	//IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], feat1, iFeature1Num );
+	//cvShowImage( "Stacked Image", pStackedImg );
 	//draw_features( pImages[0], feat1, iFeature1Num );
 
 	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
