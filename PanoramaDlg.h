@@ -37,6 +37,7 @@ public:
 	
 	// TODO: release
 	FILE* m_fileInputYUV;
+	FILE* m_fileOutputYUV;
 	bool m_bFileIsOpen;
 
 	int m_iFrameNo;

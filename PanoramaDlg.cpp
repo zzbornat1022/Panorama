@@ -180,18 +180,25 @@ void CPanoramaDlg::OnOpenFile()
 	TCHAR szFilters[]= _T("YUV Files (*.yuv)|*.yuv|");
 	CFileDialog fileDlg( TRUE, NULL, _T("*.yuv"), OFN_FILEMUSTEXIST | OFN_HIDEREADONLY, szFilters );
 	CString csInputFilePath;
+	CString csOutputFilePath;
+	CString csFileExt;
 	if( fileDlg.DoModal() == IDOK )
 	{
 		csInputFilePath = fileDlg.GetPathName();
+		csFileExt = fileDlg.GetFileExt();
+		csOutputFilePath = csInputFilePath;
+		csOutputFilePath.Insert( csInputFilePath.GetLength()-csFileExt.GetLength()-1, _T("1") );
 	}
 
 	if ( csInputFilePath !=  "" )
 	{
 		// Convert CString to const char
 		CStringA csTempInputFilePath( csInputFilePath );
+		CStringA csTempOutputFilePath( csOutputFilePath );
 
 		// TODO: If open failed
 		m_fileInputYUV = fopen( csTempInputFilePath, "rb" );
+		m_fileOutputYUV = fopen( csTempOutputFilePath, "rb" );
 		m_bFileIsOpen = true;
 	}
 
@@ -213,22 +220,22 @@ void CPanoramaDlg::OnOpenFile()
 		fseek( m_fileInputYUV, m_iFrameNo*iFrameByteNum, SEEK_SET );
 		if ( fread( uchYUV, 1, iFrameByteNum, m_fileInputYUV ) == iFrameByteNum )
 		{
-			m_iMosaicFrameAmount++;
+			//m_iMosaicFrameAmount++;
 
-			pMoreImages = (IplImage**) realloc ( m_pImages, m_iMosaicFrameAmount * sizeof(IplImage*) );
-			if ( pMoreImages != NULL )
-			{
-				m_pImages = pMoreImages;
-				m_pImages[m_iMosaicFrameAmount-1] = cvCreateImage( cvSize ( m_iFrameWidth , m_iFrameHeight ) , IPL_DEPTH_8U , 3 );
-				m_pImages[m_iMosaicFrameAmount-1]->origin = 1;
-				ConvertYUVToRGB( uchYUV, (unsigned char *)m_pImages[m_iMosaicFrameAmount-1]->imageData, m_iFrameWidth, m_iFrameHeight  );
-			}
-			else 
-			{
-				free (m_pImages);
-				AfxMessageBox ( _T("Error (re)allocating memory") );
-				exit (1);
-			}
+			//pMoreImages = (IplImage**) realloc ( m_pImages, m_iMosaicFrameAmount * sizeof(IplImage*) );
+			//if ( pMoreImages != NULL )
+			//{
+			//	m_pImages = pMoreImages;
+			//	m_pImages[m_iMosaicFrameAmount-1] = cvCreateImage( cvSize ( m_iFrameWidth , m_iFrameHeight ) , IPL_DEPTH_8U , 3 );
+			//	m_pImages[m_iMosaicFrameAmount-1]->origin = 1;
+			//	ConvertYUVToRGB( uchYUV, (unsigned char *)m_pImages[m_iMosaicFrameAmount-1]->imageData, m_iFrameWidth, m_iFrameHeight  );
+			//}
+			//else 
+			//{
+			//	free (m_pImages);
+			//	AfxMessageBox ( _T("Error (re)allocating memory") );
+			//	exit (1);
+			//}
 
 			m_iFrameNo += m_iFrameInterval;
 		}
@@ -249,7 +256,7 @@ void CPanoramaDlg::OnOpenFile()
 	//}
 
 	// Show image in picture control
-	ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
+	// ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
 }
 
 void CPanoramaDlg::OnExitApp()
