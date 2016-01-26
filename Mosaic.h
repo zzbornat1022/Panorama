@@ -93,6 +93,9 @@ enum feature_match_type
 /** max feature descriptor length */
 #define FEATURE_MAX_D 128
 
+/* threshold on squared ratio of distances between NN and 2nd NN */
+#define NN_SQ_DIST_RATIO_THR 0.49
+
 /******************************** Structures *********************************/
 
 /** vertex coord */
@@ -163,7 +166,10 @@ private:
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
-	void StickFirstFrame ( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
+	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
+
+	int FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
+	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );
 
 	/*********************** Functions prototyped in opensift **********************/
 	int sift_features( IplImage* img, struct feature** feat );
@@ -211,4 +217,7 @@ private:
 	void draw_oxfd_feature( IplImage* img, struct feature* feat, CvScalar color );
 	void draw_lowe_features( IplImage* img, struct feature* feat, int n );
 	void draw_lowe_feature( IplImage* img, struct feature* feat, CvScalar color );
+
+	double descr_dist_sq( struct feature* f1, struct feature* f2 );
+	IplImage* stack_imgs( IplImage* img1, IplImage* img2 );
 };

@@ -28,9 +28,13 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	// Set panorama background color to black
 	SetBackgroundColor( m_pPanorama, 0 );
 
-	/*feature* feat;
-	int iFeatureNum = sift_features( pImages[0], &feat );
-	draw_features( pImages[0], feat, iFeatureNum );*/
+	feature* feat1, * feat2;
+	int iFeature1Num = sift_features( pImages[0], &feat1 );
+	int iFeature2Num = sift_features( pImages[1], &feat2 );
+	int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], feat1, iFeature1Num );
+	cvShowImage( "Stacked Image", pStackedImg );
+	//draw_features( pImages[0], feat1, iFeature1Num );
 
 	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
 	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
@@ -61,6 +65,59 @@ void CMosaic::StickFirstFrame ( IplImage* pFirstFrame, CvPoint ptPosition, IplIm
 	cvSetImageROI( pPanorama, rectPanoramaROI );
 	cvCopy( pFirstFrame, pPanorama );
 	cvResetImageROI(pPanorama); 
+}
+
+int CMosaic::FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
+{
+	int n, matchBest, matchBetter;
+	float ddf, ddfBest, ddfBetter;	
+
+	n = 0;
+	
+	for ( int i = 1; i < iFeat1Num; i++ )
+	{
+		matchBest = matchBetter = 0;
+		ddf = 0.0;
+		ddfBest = ddfBetter = 10000000.0;
+
+		for ( int j = 1; j < iFeat2Num; j++ )
+		{
+			ddf = descr_dist_sq ( &feat1[i], &feat2[j] );
+
+			if ( ddf <= ddfBest )
+			{
+				matchBetter = matchBest;
+				ddfBetter = ddfBest;
+				matchBest = j;
+				ddfBest = ddf;
+			}
+			else if ( ddf < ddfBetter )
+			{
+				matchBetter = j;
+				ddfBetter = ddf;
+			}
+		}
+		if ( ddfBest < ddfBetter * NN_SQ_DIST_RATIO_THR )
+		{
+			n++;
+			feat1[i].fwd_match = &feat2[matchBest];
+		}
+	}	
+	return n;
+}
+
+IplImage* CMosaic::DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum )
+{
+	IplImage* pStackedImg = stack_imgs( img1, img2 );
+	pStackedImg->origin = 1;
+	for ( int i = 0; i < iFeatNum; i++ )
+	{
+		if ( feat[i].fwd_match != NULL )
+		{
+			cvLine( pStackedImg, cvPoint( (int) (feat[i].x),  (int) (feat[i].y) ), cvPoint( ( (int) (feat[i].fwd_match->x) + img1->width),  (int) (feat[i].fwd_match->y) ), CV_RGB( 255, 255, 0 ), 1, 8, 0 );
+		}
+	}
+	return pStackedImg;
 }
 
 /*********************** Functions prototyped in opensift **********************/
@@ -221,7 +278,7 @@ IplImage*** CMosaic::build_gauss_pyr( IplImage* base, int octvs, int intvls, dou
 	IplImage*** gauss_pyr;
 	const int _intvls = intvls;
 	double* sig = (double*) calloc ( intvls + 3, sizeof(double) );
-	double sig_total, sig_prev, k;
+	double k;
 	int i, o;
 
 	gauss_pyr = (IplImage***) calloc( octvs, sizeof( IplImage** ) );
@@ -1319,4 +1376,55 @@ void CMosaic::draw_lowe_feature( IplImage* img, struct feature* feat, CvScalar c
 	cvLine( img, start, end, color, 1, 8, 0 );
 	cvLine( img, end, h1, color, 1, 8, 0 );
 	cvLine( img, end, h2, color, 1, 8, 0 );
+}
+
+/*
+  Calculates the squared Euclidian distance between two feature descriptors.
+  
+  @param f1 first feature
+  @param f2 second feature
+  
+  @return Returns the squared Euclidian distance between the descriptors of
+    f1 and f2.
+*/
+double CMosaic::descr_dist_sq( struct feature* f1, struct feature* f2 )
+{
+	double diff, dsq = 0;
+	double* descr1, * descr2;
+	int i, d;
+
+	d = f1->d;
+	if( f2->d != d )
+		return DBL_MAX;
+	descr1 = f1->descr;
+	descr2 = f2->descr;
+
+	for( i = 0; i < d; i++ )
+    {
+		diff = descr1[i] - descr2[i];
+		dsq += diff*diff;
+    }
+	return dsq;
+}
+
+/*
+  Combines two images by scacking one on top of the other
+  
+  @param img1 top image
+  @param img2 bottom image
+  
+  @return Returns the image resulting from stacking \a img1 on top if \a img2
+*/
+IplImage* CMosaic::stack_imgs( IplImage* img1, IplImage* img2 )
+{
+	IplImage* stacked = cvCreateImage( cvSize( img1->width + img2->width, MAX( img1->height, img2->height ) ), IPL_DEPTH_8U, 3 );
+
+	cvZero( stacked );
+	cvSetImageROI( stacked, cvRect( 0, 0, img1->width, img1->height ) );
+	cvAdd( img1, stacked, stacked, NULL );
+	cvSetImageROI( stacked, cvRect(img1->width, 0, img2->width, img2->height) );
+	cvAdd( img2, stacked, stacked, NULL );
+	cvResetImageROI( stacked );
+
+	return stacked;
 }

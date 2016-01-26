@@ -275,6 +275,7 @@ void CPanoramaDlg::OnEditStartMosaic()
 	
 	m_iPanoramaWidth = 3000;
 	m_iPanoramaHeight = 2000;
+	// TODO: Arrange the Mosaic seq
 	m_pPanorama = m_cMosaic.Mosaic( m_pImages, m_iMosaicFrameAmount, m_iFrameWidth, m_iFrameHeight, m_iPanoramaWidth, m_iPanoramaHeight );
 	
 	ShowImgInControl( m_pWndPanorama, m_pPanorama );
