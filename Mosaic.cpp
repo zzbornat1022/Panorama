@@ -31,6 +31,7 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	//feature* feat1, * feat2;
 	//int iFeature1Num = sift_features( pImages[0], &feat1 );
 	//int iFeature2Num = sift_features( pImages[1], &feat2 );
+	// TODO: get_matched_features
 	//int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 	//IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], feat1, iFeature1Num );
 	//cvShowImage( "Stacked Image", pStackedImg );
@@ -56,6 +57,7 @@ bool CMosaic::CreatePanorama( IplImage** pPanorama, int iWidth, int iHeight )
 
 void CMosaic::SetBackgroundColor( IplImage* pImg, int iColor )
 {
+	// TODO: cvZero
 	memset( pImg->imageData, iColor, pImg->widthStep*pImg->height );
 }
 
@@ -112,6 +114,7 @@ IplImage* CMosaic::DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct 
 	pStackedImg->origin = 1;
 	for ( int i = 0; i < iFeatNum; i++ )
 	{
+		// TODO: get_matched_features
 		if ( feat[i].fwd_match != NULL )
 		{
 			cvLine( pStackedImg, cvPoint( (int) (feat[i].x),  (int) (feat[i].y) ), cvPoint( ( (int) (feat[i].fwd_match->x) + img1->width),  (int) (feat[i].fwd_match->y) ), CV_RGB( 255, 255, 0 ), 1, 8, 0 );
