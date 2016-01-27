@@ -1340,8 +1340,6 @@ void CMosaic::draw_lowe_features( IplImage* img, struct feature* feat, int n )
 		draw_lowe_feature( img, feat + i, color );
 }
 
-
-
 /*
   Draws a single Lowe-type feature
 

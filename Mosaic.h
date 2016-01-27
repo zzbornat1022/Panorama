@@ -220,4 +220,6 @@ private:
 
 	double descr_dist_sq( struct feature* f1, struct feature* f2 );
 	IplImage* stack_imgs( IplImage* img1, IplImage* img2 );
+
+	CvMat* ransac_xform( struct feature* features, int n, int mtype, ransac_xform_fn xform_fn, int m, double p_badxform, ransac_err_fn err_fn, double err_tol, struct feature*** inliers, int* n_in )
 };
