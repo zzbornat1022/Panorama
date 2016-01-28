@@ -96,6 +96,51 @@ enum feature_match_type
 /* threshold on squared ratio of distances between NN and 2nd NN */
 #define NN_SQ_DIST_RATIO_THR 0.49
 
+// xform
+
+/* RANSAC error tolerance in pixels */
+#define RANSAC_ERR_TOL 3
+
+/** pessimistic estimate of fraction of inlers for RANSAC */
+#define RANSAC_INLIER_FRAC_EST 0.25
+
+/** estimate of the probability that a correspondence supports a bad model */
+#define RANSAC_PROB_BAD_SUPP 0.10
+
+/* extracts a feature's RANSAC data */
+#define feat_ransac_data( feat ) ( (struct ransac_data*) (feat)->feature_data )
+
+/**
+   Prototype for transformation functions passed to ransac_xform().  Functions
+   of this type should compute a transformation matrix given a set of point
+   correspondences.
+
+   @param pts array of points
+   @param mpts array of corresponding points; each \a pts[\a i], \a i=0..\a
+     n-1, corresponds to \a mpts[\a i]
+   @param n number of points in both \a pts and \a mpts
+   
+   @return Should return a transformation matrix that transforms each point in
+     \a pts to the corresponding point in \a mpts or NULL on failure.
+*/
+typedef CvMat* (*ransac_xform_fn)( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
+
+
+/**
+   Prototype for error functions passed to ransac_xform().  For a given
+   point, its correspondence, and a transform, functions of this type should
+   compute a measure of error between the correspondence and the point after
+   the point has been transformed by the transform.
+
+   @param pt a point
+   @param mpt \a pt's correspondence
+   @param T a transform
+
+   @return Should return a measure of error between \a mpt and \a pt after
+     \a pt has been transformed by the transform \a T.
+*/
+typedef double (*ransac_err_fn)( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* T );
+
 /******************************** Structures *********************************/
 
 /** vertex coord */
@@ -143,6 +188,13 @@ struct feature
   CvPoint2D64f img_pt;           /**< location in image */
   CvPoint2D64f mdl_pt;           /**< location in model */
   void* feature_data;            /**< user-definable data */
+};
+
+/** holds feature data relevant to ransac */
+struct ransac_data
+{
+	void* orig_feat_data;
+	int sampled;
 };
 
 class CMosaic
@@ -220,6 +272,19 @@ private:
 
 	double descr_dist_sq( struct feature* f1, struct feature* f2 );
 	IplImage* stack_imgs( IplImage* img1, IplImage* img2 );
+	double dist_sq_2D( CvPoint2D64f p1, CvPoint2D64f p2 );
 
-	CvMat* ransac_xform( struct feature* features, int n, int mtype, ransac_xform_fn xform_fn, int m, double p_badxform, ransac_err_fn err_fn, double err_tol, struct feature*** inliers, int* n_in )
+	CvMat* ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in );
+	CvMat* dlt_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
+	CvMat* lsq_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
+	double homog_xfer_err( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* H );
+	CvPoint2D64f persp_xform_pt( CvPoint2D64f pt, CvMat* T );
+	struct feature* get_match( struct feature* feat, int mtype );
+	int get_matched_features( struct feature* features, int n, int mtype, struct feature*** matched );
+	int calc_min_inliers( int n, int m, double p_badsupp, double p_badxform );
+	double log_factorial( int n );
+	struct feature** draw_ransac_sample( struct feature** features, int n, int m );
+	void extract_corresp_pts( struct feature** features, int n, int mtype, CvPoint2D64f** pts, CvPoint2D64f** mpts );
+	int find_consensus( struct feature**, int, int, CvMat*, double, struct feature*** );
+	void release_mem( CvPoint2D64f*, CvPoint2D64f*, struct feature** );
 };
