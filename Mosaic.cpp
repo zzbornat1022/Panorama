@@ -28,22 +28,34 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	// Set panorama background color to black
 	SetBackgroundColor( m_pPanorama, 0 );
 
-	feature* feat1, * feat2;
-	int iFeature1Num = sift_features( pImages[0], &feat1 );
-	int iFeature2Num = sift_features( pImages[1], &feat2 );
+	//feature* feat1, * feat2;
+	//int iFeature1Num = sift_features( pImages[0], &feat1 );
+	//int iFeature2Num = sift_features( pImages[1], &feat2 );
 	// TODO: get_matched_features
-	int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
-	CvMat* H;
-	//ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 1.0, NULL, &in );
-	feature*** inliners;
-	int* in_n;
-	inliners = (feature***) calloc( 1, sizeof( feature** ) );
-	in_n = (int*) calloc(1,sizeof(int));
-	H = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
-	IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], **inliners, *in_n );
-	cvShowImage( "Stacked Image", pStackedImg );
+	//int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	//CvMat* H;
+	//IplImage* xformed;
+	//feature*** inliners;
+	//int* in_n;
+	//inliners = (feature***) calloc( 1, sizeof( feature** ) );
+	//in_n = (int*) calloc( 1, sizeof(int) );
+	//H = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
+	//if ( H )
+	//{
+	//	xformed = cvCreateImage( cvGetSize( pImages[1] ), IPL_DEPTH_8U, 3 );
+	//	xformed->origin = 1;
+	//	cvWarpPerspective( pImages[0], xformed, H, CV_INTER_LINEAR + CV_WARP_FILL_OUTLIERS, cvScalarAll( 0 ) );
+	//	cvNamedWindow( "Xformed", 1 );
+	//	cvShowImage( "Xformed", xformed );
+	//	cvShowImage( " pImages[1]",  pImages[1] );
+	//	cvWaitKey( 0 );
+	//	cvReleaseImage( &xformed );
+	//	cvReleaseMat( &H );
+	//}
+	//IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], **inliners, *in_n );
+	//cvShowImage( "Stacked Image", pStackedImg );
 	//draw_features( pImages[0], feat1, iFeature1Num );
-
+	
 	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
 	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
 	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;

@@ -147,9 +147,7 @@ typedef double (*ransac_err_fn)( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* T );
 struct vertex_coord 
 {
 	CvPoint left_bottom_vertex;
-	CvPoint left_top_vertex;
 	CvPoint right_top_vertex;
-	CvPoint right_bottom_vertex;
 };
 
 /** holds feature data relevant to detection */

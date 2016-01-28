@@ -198,7 +198,7 @@ void CPanoramaDlg::OnOpenFile()
 	// TODO: width and height should not be fixed
 	m_iFrameWidth = 704;
 	m_iFrameHeight = 576;
-	m_iFrameInterval = 2;
+	m_iFrameInterval = 1;
 	// TODO: if m_iFrameWidth * m_iFrameHeight * 1.5 isn't an int
 	int iFrameByteNum = m_iFrameWidth * m_iFrameHeight * 1.5;
 
