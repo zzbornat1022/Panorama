@@ -194,6 +194,10 @@ void CPanoramaDlg::OnOpenFile()
 		m_fileInputYUV = fopen( csTempInputFilePath, "rb" );
 		m_bFileIsOpen = true;
 	}
+	else
+	{
+		return;
+	}
 
 	// TODO: width and height should not be fixed
 	m_iFrameWidth = 704;

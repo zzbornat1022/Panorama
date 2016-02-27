@@ -147,7 +147,9 @@ typedef double (*ransac_err_fn)( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* T );
 struct vertex_coord 
 {
 	CvPoint left_bottom_vertex;
+	CvPoint left_top_vertex;
 	CvPoint right_top_vertex;
+	CvPoint right_bottom_vertex;
 };
 
 /** holds feature data relevant to detection */
@@ -213,10 +215,16 @@ private:
 
 	CvPoint m_ptFirstFrameLeftBottomVertex;
 
+	// TODO: Release
+	vertex_coord* m_vcCurrentPanoramaRegion;
+	vertex_coord* m_vcLastFrameRegion;
+	CvRect m_rectRefMosaicRegion;
+
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
 	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
+	bool MosaicFrame(  IplImage* pFrame, CvRect rectPosition, IplImage* pPanorama, struct vertex_coord* vcCurrentPanoramaRegion, struct vertex_coord* m_vcLastFrameRegion );
 
 	int FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
 	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );

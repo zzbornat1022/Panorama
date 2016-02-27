@@ -27,6 +27,30 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 
 	// Set panorama background color to black
 	SetBackgroundColor( m_pPanorama, 0 );
+	
+	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
+	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
+	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
+	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
+
+	m_vcCurrentPanoramaRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
+	m_vcLastFrameRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
+	m_vcCurrentPanoramaRegion->left_bottom_vertex.x = m_vcLastFrameRegion->left_bottom_vertex.x = m_rectRefMosaicRegion.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_vcCurrentPanoramaRegion->left_bottom_vertex.y = m_vcLastFrameRegion->left_bottom_vertex.y = m_rectRefMosaicRegion.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcCurrentPanoramaRegion->left_top_vertex.x = m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_vcCurrentPanoramaRegion->left_top_vertex.y = m_vcLastFrameRegion->left_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
+	m_vcCurrentPanoramaRegion->right_bottom_vertex.x = m_vcLastFrameRegion->right_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
+	m_vcCurrentPanoramaRegion->right_bottom_vertex.y = m_vcLastFrameRegion->right_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcCurrentPanoramaRegion->right_top_vertex.x = m_vcLastFrameRegion->right_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
+	m_vcCurrentPanoramaRegion->right_top_vertex.y = m_vcLastFrameRegion->right_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
+	m_rectRefMosaicRegion.width = iFrameWidth;
+	m_rectRefMosaicRegion.height = iFrameHeight;
+
+	// TODO: change 2 to iImageAmount
+	for ( int i = 1; i < 2; i ++)
+	{
+		MosaicFrame( pImages[i], m_rectRefMosaicRegion, m_pPanorama, m_vcCurrentPanoramaRegion, m_vcLastFrameRegion );
+	}
 
 	//feature* feat1, * feat2;
 	//int iFeature1Num = sift_features( pImages[0], &feat1 );
@@ -55,11 +79,6 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	//IplImage* pStackedImg = DrawMatchedFeatures( pImages[0], pImages[1], **inliners, *in_n );
 	//cvShowImage( "Stacked Image", pStackedImg );
 	//draw_features( pImages[0], feat1, iFeature1Num );
-	
-	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
-	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
-	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
-	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
 
 	return m_pPanorama;
 }
@@ -80,12 +99,74 @@ void CMosaic::SetBackgroundColor( IplImage* pImg, int iColor )
 	memset( pImg->imageData, iColor, pImg->widthStep*pImg->height );
 }
 
-void CMosaic::StickFirstFrame ( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama )
+void CMosaic::StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama )
 {
 	CvRect rectPanoramaROI = cvRect( ptPosition.x, ptPosition.y, pFirstFrame->width, pFirstFrame->height ); 
 	cvSetImageROI( pPanorama, rectPanoramaROI );
 	cvCopy( pFirstFrame, pPanorama );
 	cvResetImageROI(pPanorama); 
+}
+
+bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplImage* pPanorama, struct vertex_coord* vcCurrentPanoramaRegion, struct vertex_coord* m_vcLastFrameRegion )
+{
+	// set panorama roi
+	cvSetImageROI( pPanorama, rectRefMosaicRegion );
+	// TODO release
+	IplImage* pRefMosaicRegion = cvCreateImage( cvSize( rectRefMosaicRegion.width, rectRefMosaicRegion.height ), IPL_DEPTH_8U, 3 );
+	pRefMosaicRegion->origin = 1;
+	cvCopy( pPanorama, pRefMosaicRegion, 0 );
+	cvResetImageROI( pPanorama );
+
+	// find sift
+	// TODO release
+	feature* feat1, * feat2;
+	CvMat* matTransformation;
+	feature*** inliners;
+	int* in_n;
+	inliners = (feature***) calloc( 1, sizeof( feature** ) );
+	in_n = (int*) calloc( 1, sizeof(int) );
+	int iFeature1Num = sift_features( pFrame, &feat1 );
+	int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
+	int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
+
+	cvReleaseImage(&pRefMosaicRegion);
+
+
+	// stick frame
+	if ( matTransformation )
+	{
+		int iNewX, iNewY;
+		double dbMatData[9];
+		double dbTmpB, dbTmpG, dbTmpR;
+		CvScalar tmpScalar;
+		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformation, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformation, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformation, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformation, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformation, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformation, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformation, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformation, 2, 2 );
+
+		for ( int i = 0; i < pFrame->width; i++ )
+		{
+			for ( int j = 0; j < pFrame->height; j++ )
+			{
+				tmpScalar = cvGet2D( pFrame, j, i );
+				iNewX = (int)((dbMatData[0] * i + dbMatData[1] * j + dbMatData[2]) / (dbMatData[6] * i + dbMatData[7] * j + dbMatData[8]) + 0.5);
+				iNewX += m_rectRefMosaicRegion.x;
+				iNewY = (int)((dbMatData[3] * i + dbMatData[4] * j + dbMatData[5]) / (dbMatData[6] * i + dbMatData[7] * j + dbMatData[8]) + 0.5);
+				iNewY += m_rectRefMosaicRegion.y;
+				cvSet2D( pPanorama, iNewY, iNewX, tmpScalar );
+			}
+		}
+		
+		cvReleaseMat( &matTransformation );
+	}
+
+	return true;
 }
 
 int CMosaic::FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
