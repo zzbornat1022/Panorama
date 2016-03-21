@@ -216,15 +216,17 @@ private:
 	CvPoint m_ptFirstFrameLeftBottomVertex;
 
 	// TODO: Release
-	vertex_coord* m_vcCurrentPanoramaRegion;
-	vertex_coord* m_vcLastFrameRegion;
+	CvRect m_rectCurrentPanoramaRegion;
 	CvRect m_rectRefMosaicRegion;
+	vertex_coord* m_vcLastFrameRegion;
+	
 
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
 	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
-	bool MosaicFrame(  IplImage* pFrame, CvRect rectPosition, IplImage* pPanorama, struct vertex_coord* vcCurrentPanoramaRegion, struct vertex_coord* m_vcLastFrameRegion );
+	bool MosaicFrame(  IplImage* pFrame, CvRect rectPosition, IplImage* pPanorama, CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion );
+	void UpdatePanoramaAndRefMosaicRegion( double dbMatData[], CvRect rectRefMosaicRegion, CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion );
 
 	int FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
 	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );

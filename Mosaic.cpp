@@ -33,23 +33,22 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
 	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
 
-	m_vcCurrentPanoramaRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
 	m_vcLastFrameRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
-	m_vcCurrentPanoramaRegion->left_bottom_vertex.x = m_vcLastFrameRegion->left_bottom_vertex.x = m_rectRefMosaicRegion.x = m_ptFirstFrameLeftBottomVertex.x;
-	m_vcCurrentPanoramaRegion->left_bottom_vertex.y = m_vcLastFrameRegion->left_bottom_vertex.y = m_rectRefMosaicRegion.y = m_ptFirstFrameLeftBottomVertex.y;
-	m_vcCurrentPanoramaRegion->left_top_vertex.x = m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
-	m_vcCurrentPanoramaRegion->left_top_vertex.y = m_vcLastFrameRegion->left_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
-	m_vcCurrentPanoramaRegion->right_bottom_vertex.x = m_vcLastFrameRegion->right_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
-	m_vcCurrentPanoramaRegion->right_bottom_vertex.y = m_vcLastFrameRegion->right_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
-	m_vcCurrentPanoramaRegion->right_top_vertex.x = m_vcLastFrameRegion->right_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
-	m_vcCurrentPanoramaRegion->right_top_vertex.y = m_vcLastFrameRegion->right_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
-	m_rectRefMosaicRegion.width = iFrameWidth;
-	m_rectRefMosaicRegion.height = iFrameHeight;
+	m_rectCurrentPanoramaRegion.x = m_rectRefMosaicRegion.x = m_vcLastFrameRegion->left_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_rectCurrentPanoramaRegion.y = m_rectRefMosaicRegion.y = m_vcLastFrameRegion->left_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_vcLastFrameRegion->left_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
+	m_vcLastFrameRegion->right_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
+	m_vcLastFrameRegion->right_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcLastFrameRegion->right_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
+	m_vcLastFrameRegion->right_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
+	m_rectCurrentPanoramaRegion.width = m_rectRefMosaicRegion.width = iFrameWidth;
+	m_rectCurrentPanoramaRegion.height = m_rectRefMosaicRegion.height = iFrameHeight;
 
 	// TODO: change 2 to iImageAmount
-	for ( int i = 1; i < 2; i ++)
+	for ( int i = 1; i < 10; i ++)
 	{
-		MosaicFrame( pImages[i], m_rectRefMosaicRegion, m_pPanorama, m_vcCurrentPanoramaRegion, m_vcLastFrameRegion );
+		MosaicFrame( pImages[i], m_rectRefMosaicRegion, m_pPanorama, m_rectCurrentPanoramaRegion, m_vcLastFrameRegion );
 	}
 
 	//feature* feat1, * feat2;
@@ -107,7 +106,7 @@ void CMosaic::StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplIma
 	cvResetImageROI(pPanorama); 
 }
 
-bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplImage* pPanorama, struct vertex_coord* vcCurrentPanoramaRegion, struct vertex_coord* m_vcLastFrameRegion )
+bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplImage* pPanorama,  CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion )
 {
 	// set panorama roi
 	cvSetImageROI( pPanorama, rectRefMosaicRegion );
@@ -130,16 +129,34 @@ bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplIma
 	int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 	matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
 
+	// release
 	cvReleaseImage(&pRefMosaicRegion);
-
+	if ( feat1 != NULL )
+	{
+		free( feat1 );
+		feat1 = NULL;
+	}
+	if ( feat2 != NULL )
+	{
+		free( feat2 );
+		feat2 = NULL;
+	}
+	if ( inliners != NULL )
+	{
+		free( inliners );
+		inliners	=	NULL;
+	}
+	if ( in_n != NULL )
+	{
+		free( in_n );
+		in_n = NULL;
+	}
 
 	// stick frame
 	if ( matTransformation )
 	{
 		int iNewX, iNewY;
 		double dbMatData[9];
-		double dbTmpB, dbTmpG, dbTmpR;
-		CvScalar tmpScalar;
 		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
 		dbMatData[1] = cvmGet( matTransformation, 0, 1 );
 		dbMatData[2] = cvmGet( matTransformation, 0, 2 );
@@ -149,6 +166,7 @@ bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplIma
 		dbMatData[6] = cvmGet( matTransformation, 2, 0 );
 		dbMatData[7] = cvmGet( matTransformation, 2, 1 );
 		dbMatData[8] = cvmGet( matTransformation, 2, 2 );
+		CvScalar tmpScalar;
 
 		for ( int i = 0; i < pFrame->width; i++ )
 		{
@@ -162,11 +180,96 @@ bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplIma
 				cvSet2D( pPanorama, iNewY, iNewX, tmpScalar );
 			}
 		}
-		
+
+		UpdatePanoramaAndRefMosaicRegion( dbMatData, rectRefMosaicRegion, rectCurrentPanoramaRegion, vcLastFrameRegion );
+
 		cvReleaseMat( &matTransformation );
+		
+		return true;
 	}
 
-	return true;
+	return false;
+}
+
+void CMosaic::UpdatePanoramaAndRefMosaicRegion( double dbMatData[], CvRect rectRefMosaicRegion, CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion )
+{
+	int iRigthMax = rectRefMosaicRegion.width - 1;
+	int iTopMax = rectRefMosaicRegion.height - 1;
+	CvPoint ptLastFrameLeftBottomVertex;
+	CvPoint ptLastFrameRightTopVertex;
+	
+	// update vcLastFrameRegion
+	vcLastFrameRegion->left_bottom_vertex.x = (int)((dbMatData[0] * 0 + dbMatData[1] * 0 + dbMatData[2]) / (dbMatData[6] * 0 + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+	vcLastFrameRegion->left_bottom_vertex.y = (int)((dbMatData[3] * 0 + dbMatData[4] * 0 + dbMatData[5]) / (dbMatData[6] * 0 + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+	vcLastFrameRegion->right_bottom_vertex.x = (int)((dbMatData[0] * iRigthMax + dbMatData[1] * 0 + dbMatData[2]) / (dbMatData[6] * iRigthMax + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+	vcLastFrameRegion->right_bottom_vertex.y = (int)((dbMatData[3] * iRigthMax + dbMatData[4] * 0 + dbMatData[5]) / (dbMatData[6] * iRigthMax + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+	vcLastFrameRegion->right_top_vertex.x = (int)((dbMatData[0] * iRigthMax + dbMatData[1] * iTopMax + dbMatData[2]) / (dbMatData[6] * iRigthMax + dbMatData[7] * iTopMax + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+	vcLastFrameRegion->right_top_vertex.y = (int)((dbMatData[3] * iRigthMax + dbMatData[4] * iTopMax + dbMatData[5]) / (dbMatData[6] * iRigthMax + dbMatData[7] * iTopMax + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+	vcLastFrameRegion->left_top_vertex.x = (int)((dbMatData[0] * 0 + dbMatData[1] * iTopMax + dbMatData[2]) / (dbMatData[6] * 0 + dbMatData[7] * iTopMax + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+	vcLastFrameRegion->left_top_vertex.y = (int)((dbMatData[3] * 0 + dbMatData[4] * iTopMax + dbMatData[5]) / (dbMatData[6] * 0 + dbMatData[7] * iTopMax + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+	
+	if ( vcLastFrameRegion->left_bottom_vertex.x < vcLastFrameRegion->left_top_vertex.x )
+		ptLastFrameLeftBottomVertex.x = vcLastFrameRegion->left_bottom_vertex.x;
+	else
+		ptLastFrameLeftBottomVertex.x = vcLastFrameRegion->left_top_vertex.x;
+
+	if ( vcLastFrameRegion->left_bottom_vertex.y < vcLastFrameRegion->right_bottom_vertex.y )
+		ptLastFrameLeftBottomVertex.y = vcLastFrameRegion->left_bottom_vertex.y;
+	else
+		ptLastFrameLeftBottomVertex.y = vcLastFrameRegion->right_bottom_vertex.y;
+
+	if ( vcLastFrameRegion->right_top_vertex.x > vcLastFrameRegion->right_bottom_vertex.x )
+		ptLastFrameRightTopVertex.x = vcLastFrameRegion->right_top_vertex.x;
+	else
+		ptLastFrameRightTopVertex.x = vcLastFrameRegion->right_bottom_vertex.x;
+
+	if ( vcLastFrameRegion->right_top_vertex.y > vcLastFrameRegion->left_top_vertex.y )
+		ptLastFrameRightTopVertex.y = vcLastFrameRegion->right_top_vertex.y;
+	else
+		ptLastFrameRightTopVertex.y = vcLastFrameRegion->left_top_vertex.y;
+
+	// update rectCurrentPanoramaRegion
+	if ( ptLastFrameRightTopVertex.x > rectCurrentPanoramaRegion.x + rectCurrentPanoramaRegion.width )
+		iRigthMax = ptLastFrameRightTopVertex.x;
+	else
+		iRigthMax = rectCurrentPanoramaRegion.x + rectCurrentPanoramaRegion.width;
+
+	if (ptLastFrameRightTopVertex.y > rectCurrentPanoramaRegion.y + rectCurrentPanoramaRegion.height )
+		iTopMax = ptLastFrameRightTopVertex.y;
+	else
+		iTopMax = rectCurrentPanoramaRegion.y + rectCurrentPanoramaRegion.height;
+	
+	if ( ptLastFrameLeftBottomVertex.x < rectCurrentPanoramaRegion.x )
+		rectCurrentPanoramaRegion.x = ptLastFrameLeftBottomVertex.x;
+
+	if ( ptLastFrameLeftBottomVertex.y < rectCurrentPanoramaRegion.y )
+		rectCurrentPanoramaRegion.y = ptLastFrameLeftBottomVertex.y;
+	
+	rectCurrentPanoramaRegion.width = iRigthMax - rectCurrentPanoramaRegion.x;
+	rectCurrentPanoramaRegion.height = iTopMax - rectCurrentPanoramaRegion.y;
+
+	// update rectRefMosaicRegion
+	int iLastFrameWidth = ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x;
+	int iLastFrameHeight = ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y;
+	if ( ptLastFrameLeftBottomVertex.x - iLastFrameWidth * 0.1 < rectCurrentPanoramaRegion.x )
+		rectRefMosaicRegion.x = rectCurrentPanoramaRegion.x;
+	else
+		rectRefMosaicRegion.x = (int) ptLastFrameLeftBottomVertex.x * 0.9;
+
+	if ( ptLastFrameLeftBottomVertex.y - iLastFrameHeight * 0.1 < rectCurrentPanoramaRegion.y )
+		rectRefMosaicRegion.y = rectCurrentPanoramaRegion.y;
+	else
+		rectRefMosaicRegion.y = (int) ptLastFrameLeftBottomVertex.y * 0.9;
+
+	if ( ptLastFrameRightTopVertex.x + iLastFrameWidth * 0.1 > rectCurrentPanoramaRegion.x + rectCurrentPanoramaRegion.width )
+		rectRefMosaicRegion.width = rectCurrentPanoramaRegion.width;
+	else
+		rectRefMosaicRegion.width = ( (int) ptLastFrameRightTopVertex.x + iLastFrameWidth * 0.1 ) - rectRefMosaicRegion.x;
+
+	if ( ptLastFrameRightTopVertex.y + iLastFrameHeight * 0.1 > rectCurrentPanoramaRegion.y + rectCurrentPanoramaRegion.height )
+		rectRefMosaicRegion.height = rectCurrentPanoramaRegion.height;
+	else
+		rectRefMosaicRegion.height = ( (int) ptLastFrameRightTopVertex.y + iLastFrameHeight * 0.1 ) - rectRefMosaicRegion.y;
 }
 
 int CMosaic::FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
