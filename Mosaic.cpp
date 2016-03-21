@@ -110,14 +110,14 @@ bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplIma
 {
 	// set panorama roi
 	cvSetImageROI( pPanorama, rectRefMosaicRegion );
-	// TODO release
+	// TODO: release
 	IplImage* pRefMosaicRegion = cvCreateImage( cvSize( rectRefMosaicRegion.width, rectRefMosaicRegion.height ), IPL_DEPTH_8U, 3 );
 	pRefMosaicRegion->origin = 1;
 	cvCopy( pPanorama, pRefMosaicRegion, 0 );
 	cvResetImageROI( pPanorama );
 
 	// find sift
-	// TODO release
+	// TODO: release
 	feature* feat1, * feat2;
 	CvMat* matTransformation;
 	feature*** inliners;
@@ -155,6 +155,9 @@ bool CMosaic::MosaicFrame(  IplImage* pFrame, CvRect rectRefMosaicRegion, IplIma
 	// stick frame
 	if ( matTransformation )
 	{
+		//TODO: release
+
+
 		int iNewX, iNewY;
 		double dbMatData[9];
 		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
