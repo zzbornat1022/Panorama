@@ -227,6 +227,8 @@ private:
 
 	int m_iPartitionNum;
 
+	int m_iMosaicFrameNo;
+
 	CvPoint m_ptFirstFrameLeftBottomVertex;
 	CvRect m_rectCurrentPanoramaRegion;
 	CvRect m_rectRefMosaicRegion;
@@ -295,7 +297,7 @@ private:
 	IplImage* stack_imgs( IplImage* img1, IplImage* img2 );
 	double dist_sq_2D( CvPoint2D64f p1, CvPoint2D64f p2 );
 
-	CvMat* ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in );
+	CvMat* ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in, vector<matched_feature_pair> vAdjacentMatchedVertexPairs );
 	CvMat* dlt_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
 	CvMat* lsq_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
 	double homog_xfer_err( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* H );
@@ -306,6 +308,7 @@ private:
 	double log_factorial( int n );
 	struct feature** draw_ransac_sample( struct feature** features, int n, int m );
 	void extract_corresp_pts( struct feature** features, int n, int mtype, CvPoint2D64f** pts, CvPoint2D64f** mpts );
+	void include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int n );
 	int find_consensus( struct feature**, int, int, CvMat*, double, struct feature*** );
 	void release_mem( CvPoint2D64f*, CvPoint2D64f*, struct feature** );
 };

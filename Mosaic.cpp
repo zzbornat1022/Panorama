@@ -9,6 +9,7 @@ CMosaic::CMosaic(void)
 	m_ptFirstFrameLeftBottomVertex.x = 0;
 	m_ptFirstFrameLeftBottomVertex.y = 0;
 	m_iPartitionNum = 4;
+	m_iMosaicFrameNo = 0;
 }
 
 CMosaic::~CMosaic(void)
@@ -33,20 +34,6 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - iFrameWidth) / 2;
 	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - iFrameHeight) / 2;
 	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
-
-	m_vcLastFrameRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
-	m_vcLastFrameRegion->left_bottom_vertex.x = m_rectCurrentPanoramaRegion.x = m_ptFirstFrameLeftBottomVertex.x;
-	m_vcLastFrameRegion->left_bottom_vertex.y = m_rectCurrentPanoramaRegion.y = m_ptFirstFrameLeftBottomVertex.y;
-	m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
-	m_vcLastFrameRegion->left_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
-	m_vcLastFrameRegion->right_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
-	m_vcLastFrameRegion->right_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
-	m_vcLastFrameRegion->right_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x + iFrameWidth;
-	m_vcLastFrameRegion->right_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + iFrameHeight;
-	m_rectCurrentPanoramaRegion.width = iFrameWidth;
-	m_rectCurrentPanoramaRegion.height = iFrameHeight;
-	UpdatePanoramaAndRefMosaicRegion( m_vcLastFrameRegion, m_rectRefMosaicRegion, m_rectCurrentPanoramaRegion, m_pPanorama );
-
 
 	// TODO: change 2 to iImageAmount
 	for ( int i = 1; i < iImageAmount; i ++)
@@ -110,6 +97,19 @@ void CMosaic::StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplIma
 	cvSetImageROI( pPanorama, rectPanoramaROI );
 	cvCopy( pFirstFrame, pPanorama );
 	cvResetImageROI(pPanorama); 
+
+	m_vcLastFrameRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
+	m_vcLastFrameRegion->left_bottom_vertex.x = m_rectCurrentPanoramaRegion.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_vcLastFrameRegion->left_bottom_vertex.y = m_rectCurrentPanoramaRegion.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
+	m_vcLastFrameRegion->left_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + pFirstFrame->height;
+	m_vcLastFrameRegion->right_bottom_vertex.x = m_ptFirstFrameLeftBottomVertex.x + pFirstFrame->width;
+	m_vcLastFrameRegion->right_bottom_vertex.y = m_ptFirstFrameLeftBottomVertex.y;
+	m_vcLastFrameRegion->right_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x + pFirstFrame->width;
+	m_vcLastFrameRegion->right_top_vertex.y = m_ptFirstFrameLeftBottomVertex.y + pFirstFrame->height;
+	m_rectCurrentPanoramaRegion.width = pFirstFrame->width;
+	m_rectCurrentPanoramaRegion.height = pFirstFrame->height;
+	UpdatePanoramaAndRefMosaicRegion( m_vcLastFrameRegion, m_rectRefMosaicRegion, m_rectCurrentPanoramaRegion, m_pPanorama );
 }
 
 bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum )
@@ -143,6 +143,8 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		// TODO: release
 		feature* feat1, * feat2;
 		CvMat* matTransformation;
+		CvMat* matTransformationInvert;
+		matTransformationInvert = cvCreateMat(3,3,CV_64FC1);
 		feature*** inliners;
 		int* in_n;
 		inliners = (feature***) calloc( 1, sizeof( feature** ) );
@@ -151,11 +153,12 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
 		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
-		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
+		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
 
 		// stick frame
 		if ( matTransformation )
 		{
+			cvInvert(matTransformation, matTransformationInvert, CV_LU);
 			int iXInRef, iYInRef, iXInPano, iYInPano;
 			double dbMatData[9];
 			dbMatData[0] = cvmGet( matTransformation, 0, 0 );
@@ -223,6 +226,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 			// release
 			cvReleaseImage( &pImagePartitions[i] );
 			cvReleaseMat( &matTransformation );
+			cvReleaseMat( &matTransformationInvert );
 			if ( feat1 != NULL )
 			{
 				free( feat1 );
@@ -267,7 +271,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 	}
 
 	UpdatePanoramaAndRefMosaicRegion( vcLastFrameRegion, rectRefMosaicRegion, rectCurrentPanoramaRegion, pPanorama );
-		
+
 	return true;
 }
 
@@ -319,23 +323,28 @@ IplImage** CMosaic::DivideImage( IplImage* pImage, int iPartitionNum, int* iCorn
 
 vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_feature_pair> vMatchedVertexPairs, int iXOffset, int iYOffset, int iPartionWidth, int iPartitionHeight )
 {
-	vector<matched_feature_pair> _mfp;
+	vector<matched_feature_pair> _vmfp;
+	matched_feature_pair _mfp;
 	for ( int i = 0; i < vMatchedVertexPairs.size(); i++ )
 	{
 		if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
-			_mfp.push_back(vMatchedVertexPairs[i]);
+			_vmfp.push_back(vMatchedVertexPairs[i]);
 		}
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
-			_mfp.push_back(vMatchedVertexPairs[i]);
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x -= 1;
+			_vmfp.push_back( _mfp );
 		} 
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight ) )
 		{
-			_mfp.push_back(vMatchedVertexPairs[i]);
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.y -= 1;
+			_vmfp.push_back( _mfp );
 		}
 	}
-	return _mfp;
+	return _vmfp;
 }
 
 void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama )
@@ -390,20 +399,27 @@ void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrame
 	rectRefMosaicRegion.width = (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x) * 2;
 	rectRefMosaicRegion.height = (ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y) * 2;
 
+	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
+	char chTempOutputPath[255];
+	sprintf( chTempOutputPath, "output/Pano%d.jpg", m_iMosaicFrameNo );
+	m_iMosaicFrameNo++;
+	cvSaveImage( chTempOutputPath, pPanorama);
+	cvResetImageROI( pPanorama );
+
 // 	cvCircle( pPanorama, vcLastFrameRegion->left_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 	cvCircle( pPanorama, vcLastFrameRegion->right_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 	cvCircle( pPanorama, vcLastFrameRegion->right_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 	cvCircle( pPanorama, vcLastFrameRegion->left_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 
-// 	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
-// 	// TODO: release
-// 	IplImage* pCurrentPanoramaRegion = cvCreateImage( cvSize( rectCurrentPanoramaRegion.width, rectCurrentPanoramaRegion.height ), IPL_DEPTH_8U, 3 );
-// 	pCurrentPanoramaRegion->origin = 1;
-// 	cvCopy( pPanorama, pCurrentPanoramaRegion, 0 );
-// 	cvResetImageROI( pPanorama );
-// 	cvShowImage( "CurrentPanorama", pCurrentPanoramaRegion);
-// 	cvWaitKey( 0 );
-// 	cvReleaseImage( &pCurrentPanoramaRegion );
+//  	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
+//  	// TODO: release
+//  	IplImage* pCurrentPanoramaRegion = cvCreateImage( cvSize( rectCurrentPanoramaRegion.width, rectCurrentPanoramaRegion.height ), IPL_DEPTH_8U, 3 );
+//  	pCurrentPanoramaRegion->origin = 1;
+//  	cvCopy( pPanorama, pCurrentPanoramaRegion, 0 );
+//  	cvResetImageROI( pPanorama );
+//  	cvShowImage( "CurrentPanorama", pCurrentPanoramaRegion);
+//  	cvWaitKey( 0 );
+//  	cvReleaseImage( &pCurrentPanoramaRegion );
 // 
 //  	cvSetImageROI( pPanorama, rectRefMosaicRegion );
 //  	// TODO: release
@@ -1846,7 +1862,7 @@ double CMosaic::dist_sq_2D( CvPoint2D64f p1, CvPoint2D64f p2 )
   @return Returns a transformation matrix computed using RANSAC or NULL
     on error or if an acceptable transform could not be computed.
 */
-CvMat* CMosaic::ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in )
+CvMat* CMosaic::ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in, vector<matched_feature_pair> vAdjacentMatchedVertexPairs )
 {
 	struct feature** matched, ** sample, ** consensus, ** consensus_max = NULL;
 	struct ransac_data* rdata;
@@ -1900,6 +1916,7 @@ iteration_end:
 		cvReleaseMat( &M );
 		release_mem( pts, mpts, consensus_max );
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
+		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, &pts, &mpts, in );
 		M = lsq_homog( pts, mpts, in );
 		if( inliers )
 		{
@@ -2284,6 +2301,32 @@ void CMosaic::extract_corresp_pts( struct feature** features, int n, int mtype, 
 
 	*pts = _pts;
 	*mpts = _mpts;
+}
+
+void CMosaic::include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int n )
+{
+	CvPoint2D64f* _pts = NULL;
+	CvPoint2D64f	* _mpts = NULL;
+	for ( int i = 0; i < vAdjacentMatchedVertexPairs.size(); i++ )
+	{
+		n++;
+		_pts = (CvPoint2D64f*) realloc ( *pts, n * sizeof(CvPoint2D64f) );
+		_mpts = (CvPoint2D64f*) realloc ( *mpts, n * sizeof(CvPoint2D64f) );
+		if ( ( _pts != NULL) && ( _mpts != NULL ) )
+		{
+			*pts = _pts;
+			*mpts = _mpts;
+			(*pts)[n-1] = vAdjacentMatchedVertexPairs[i].cur_coord;
+			(*mpts)[n-1] = vAdjacentMatchedVertexPairs[i].ref_coord;
+		}
+		else 
+		{
+			free ( *pts );
+			free ( *mpts );
+			AfxMessageBox ( _T("Error (re)allocating memory") );
+			exit (1);
+		}
+	}
 }
 
 /*
