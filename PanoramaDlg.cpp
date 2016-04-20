@@ -211,6 +211,12 @@ void CPanoramaDlg::OnOpenFile()
 
 	IplImage** pMoreImages = NULL;
 
+	CvRect m_rectCutMarginRegion;
+	m_rectCutMarginRegion.x = MOSAIC_MARGIN;
+	m_rectCutMarginRegion.y = MOSAIC_MARGIN;
+	m_rectCutMarginRegion.width = m_iFrameWidth - 2*MOSAIC_MARGIN;
+	m_rectCutMarginRegion.height = m_iFrameHeight - 2*MOSAIC_MARGIN;
+
 	// TODO: If open failed
 	while ( true )
 	{
@@ -222,10 +228,20 @@ void CPanoramaDlg::OnOpenFile()
 			pMoreImages = (IplImage**) realloc ( m_pImages, m_iMosaicFrameAmount * sizeof(IplImage*) );
 			if ( pMoreImages != NULL )
 			{
+				//TODO: release
+				IplImage* pTempImage =  cvCreateImage( cvSize ( m_iFrameWidth , m_iFrameHeight ) , IPL_DEPTH_8U , 3 );
+				pTempImage->origin = 1;
+				ConvertYUVToRGB( uchYUV, (unsigned char *)pTempImage->imageData, m_iFrameWidth, m_iFrameHeight  );
+
 				m_pImages = pMoreImages;
-				m_pImages[m_iMosaicFrameAmount-1] = cvCreateImage( cvSize ( m_iFrameWidth , m_iFrameHeight ) , IPL_DEPTH_8U , 3 );
+				m_pImages[m_iMosaicFrameAmount-1] = cvCreateImage( cvSize ( m_iFrameWidth - 2*MOSAIC_MARGIN , m_iFrameHeight - 2*MOSAIC_MARGIN ) , IPL_DEPTH_8U , 3 );
 				m_pImages[m_iMosaicFrameAmount-1]->origin = 1;
-				ConvertYUVToRGB( uchYUV, (unsigned char *)m_pImages[m_iMosaicFrameAmount-1]->imageData, m_iFrameWidth, m_iFrameHeight  );
+
+				cvSetImageROI( pTempImage, m_rectCutMarginRegion );
+				cvCopy( pTempImage, m_pImages[m_iMosaicFrameAmount-1], 0 );
+				cvResetImageROI( pTempImage );
+				cvReleaseImage( &pTempImage );
+
 			}
 			else 
 			{
@@ -244,7 +260,7 @@ void CPanoramaDlg::OnOpenFile()
 		}
 	}
 
-	// Save each frame to output
+ 	// Save each frame to output
 	//char chTempOutputPath[255];
 	//for ( int i = 0; i < m_iMosaicFrameAmount; i++)
 	//{
@@ -280,7 +296,7 @@ void CPanoramaDlg::OnEditStartMosaic()
 	m_iPanoramaWidth = 3000;
 	m_iPanoramaHeight = 2000;
 	// TODO: Arrange the Mosaic seq
-	m_pPanorama = m_cMosaic.Mosaic( m_pImages, m_iMosaicFrameAmount, m_iFrameWidth, m_iFrameHeight, m_iPanoramaWidth, m_iPanoramaHeight );
+	m_pPanorama = m_cMosaic.Mosaic( m_pImages, m_iMosaicFrameAmount, m_pImages[0]->width, m_pImages[0]->height, m_iPanoramaWidth, m_iPanoramaHeight );
 	
 	ShowImgInControl( m_pWndPanorama, m_pPanorama );
 }

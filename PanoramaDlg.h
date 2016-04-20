@@ -8,6 +8,9 @@
 #include "CvvImage.h"
 #include "Mosaic.h"
 
+/*define margin*/
+#define MOSAIC_MARGIN 4
+
 // CPanoramaDlg dialog
 class CPanoramaDlg : public CDialogEx
 {

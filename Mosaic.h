@@ -4,6 +4,9 @@
 
 /******************************* Defs and macros *****************************/
 
+// /*define margin*/
+// #define MOSAIC_MARGIN 4
+
 /* absolute value */
 #ifndef ABS
 #define ABS(x) ( ( (x) < 0 )? -(x) : (x) )
@@ -152,6 +155,13 @@ struct vertex_coord
 	CvPoint right_bottom_vertex;
 };
 
+/** adjacent verticle */
+struct adjacent_matched_features
+{
+	CvPoint ref;
+	CvPoint cur;
+};
+
 /** holds feature data relevant to detection */
 struct detection_data
 {
@@ -209,24 +219,24 @@ private:
 
 	// TODO: release
 	IplImage* m_pPanorama;
+	vertex_coord* m_vcLastFrameRegion;
 
 	int m_iPanoramaPreWidth;
 	int m_iPanoramaPreHeight;
 
-	CvPoint m_ptFirstFrameLeftBottomVertex;
+	int m_iPartitionNum;
 
-	// TODO: Release
+	CvPoint m_ptFirstFrameLeftBottomVertex;
 	CvRect m_rectCurrentPanoramaRegion;
 	CvRect m_rectRefMosaicRegion;
-	vertex_coord* m_vcLastFrameRegion;
-	
 
 private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
 	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
-	bool MosaicFrame(  IplImage* pFrame, CvRect rectPosition, IplImage* pPanorama, CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion );
-	void UpdatePanoramaAndRefMosaicRegion( double dbMatData[], CvRect rectRefMosaicRegion, CvRect rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion );
+	bool MosaicFrame( IplImage* pFrame, CvRect &rectPosition, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum );
+	IplImage** DivideImage( IplImage* pImage, int iPartitionNum, int* iCornerFlag );
+	void UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama );
 
 	int FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
 	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );
@@ -285,6 +295,7 @@ private:
 	CvMat* ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in );
 	CvMat* dlt_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
 	CvMat* lsq_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
+	CvMat* lsq_homog_with_adjacent_matched_features( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n ); 
 	double homog_xfer_err( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* H );
 	CvPoint2D64f persp_xform_pt( CvPoint2D64f pt, CvMat* T );
 	struct feature* get_match( struct feature* feat, int mtype );
