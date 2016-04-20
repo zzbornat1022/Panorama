@@ -61,7 +61,7 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	//int iFeature1Num = sift_features( pImages[0], &feat1 );
 	//int iFeature2Num = sift_features( pImages[1], &feat2 );
 	// TODO: get_matched_features
-	//int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	//int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 	//CvMat* H;
 	//IplImage* xformed;
 	//feature*** inliners;
@@ -132,13 +132,13 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 	iCornerFlag = (int *)calloc( 4, sizeof(int) );
 	pImagePartitions = DivideImage( pFrame, iPartitionNum, iCornerFlag );
 
-	std::vector<CvPoint> vBlockVerticles;
+	vector<matched_feature_pair> vBlockMatchedVerticlePairs;
 
 	for ( int i = 0; i < iPartitionNum; i++ )
 	{
 		// TODO: responsive
-		int offset_x = i / 2 * pImagePartitions[i]->width;
-		int offset_y = i % 2 * pImagePartitions[i]->height;
+		int iXOffset = i / 2 * pImagePartitions[i]->width;
+		int iYOffset = i % 2 * pImagePartitions[i]->height;
 
 		// TODO: release
 		feature* feat1, * feat2;
@@ -149,13 +149,13 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		in_n = (int*) calloc( 1, sizeof( int ) );
 		int iFeature1Num = sift_features( pImagePartitions[i], &feat1 );
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
-		int iMatchedFeaturesNum = FinMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
 
 		// stick frame
 		if ( matTransformation )
 		{
-			int iNewX, iNewY;
+			int iXInRef, iYInRef, iXInPano, iYInPano;
 			double dbMatData[9];
 			dbMatData[0] = cvmGet( matTransformation, 0, 0 );
 			dbMatData[1] = cvmGet( matTransformation, 0, 1 );
@@ -168,17 +168,32 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 			dbMatData[8] = cvmGet( matTransformation, 2, 2 );
 			CvScalar tmpScalar;
 
-			for ( int j = 0; j < pImagePartitions[i]->width; j++ )
+			for ( int x = 0; x < pImagePartitions[i]->width; x++ )
 			{
-				for ( int k = 0; k < pImagePartitions[i]->height; k++ )
+				for ( int y = 0; y < pImagePartitions[i]->height; y++ )
 				{
-					tmpScalar = cvGet2D( pImagePartitions[i], k, j );
-					iNewX = (int)((dbMatData[0] * j + dbMatData[1] * k + dbMatData[2]) / (dbMatData[6] * j + dbMatData[7] * k + dbMatData[8]) + 0.5);
-					iNewY = (int)((dbMatData[3] * j + dbMatData[4] * k + dbMatData[5]) / (dbMatData[6] * j + dbMatData[7] * k + dbMatData[8]) + 0.5);
+					tmpScalar = cvGet2D( pImagePartitions[i], y, x );
+					iXInRef = (int)((dbMatData[0] * x + dbMatData[1] * y + dbMatData[2]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+					iYInRef = (int)((dbMatData[3] * x + dbMatData[4] * y + dbMatData[5]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+					iXInPano = iXInRef + m_rectRefMosaicRegion.x;
+					iYInPano = iYInRef + m_rectRefMosaicRegion.y;
+					cvSet2D( pPanorama, iYInPano, iXInPano, tmpScalar );
 					
-					iNewX += m_rectRefMosaicRegion.x;
-					iNewY += m_rectRefMosaicRegion.y;
-					cvSet2D( pPanorama, iNewY, iNewX, tmpScalar );
+					if ( ( x == 0 && y == 0 ) || ( x == 0 && y == pImagePartitions[i]->height - 1 ) || ( x == pImagePartitions[i]->width - 1 && y == 0 ) || ( x == pImagePartitions[i]->width - 1 && y == pImagePartitions[i]->height - 1 ) )
+					{
+						CvPoint ptCur, ptRef;
+						if ( x == 0 )
+							ptCur.x = x + iXOffset;
+						else
+							ptCur.x = x + iXOffset + 1;
+						if ( y == 0 )
+							ptCur.y = y + iYOffset;
+						else
+							ptCur.y = y + iYOffset + 1;
+						ptRef.x = iXInRef;
+						ptRef.y = iYInRef;
+						AddAdjacentVerticlePairToVector( vBlockMatchedVerticlePairs, ptCur, ptRef );
+					}
 				}
 			}
 
@@ -229,6 +244,13 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 			}
 		}
 	}
+
+// 	for ( int j = 0; j < vBlockMatchedVerticlePairs.size(); j++ )
+// 	{
+// 		cvCircle( pRefMosaicRegion, vBlockMatchedVerticlePairs[j].ref_coord, 5, CV_RGB(0,255,0), -1, 8, 0 );
+// 	}
+// 	cvShowImage( "pRefMosaicRegion", pRefMosaicRegion );
+// 	cvWaitKey( 0 );
 	
 	cvReleaseImage(&pRefMosaicRegion);
 	if ( iCornerFlag != NULL )
@@ -371,7 +393,22 @@ void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrame
 //  	cvReleaseImage( &pRefMosaicRegion );
 }
 
-int CMosaic::FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
+void CMosaic::AddAdjacentVerticlePairToVector( vector<matched_feature_pair>& vBlockMatchedVerticlePairs, CvPoint ptCur, CvPoint ptRef )
+{
+	for ( int i = 0; i < vBlockMatchedVerticlePairs.size(); i++ )
+	{
+		if ( ( vBlockMatchedVerticlePairs[i].cur_coord.x == ptCur.x ) && ( vBlockMatchedVerticlePairs[i].cur_coord.y == ptCur.y ) )
+			return;
+	}
+	struct matched_feature_pair mfp;
+	mfp.cur_coord.x = ptCur.x;
+	mfp.cur_coord.y = ptCur.y;
+	mfp.ref_coord.x = ptRef.x;
+	mfp.ref_coord.y = ptRef.y;
+	vBlockMatchedVerticlePairs.push_back( mfp );
+}
+
+int CMosaic::FindMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
 {
 	int n, matchBest, matchBetter;
 	float ddf, ddfBest, ddfBetter;	

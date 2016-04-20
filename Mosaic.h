@@ -2,6 +2,8 @@
 
 #include <opencv2/opencv.hpp>
 
+using namespace std;
+
 /******************************* Defs and macros *****************************/
 
 // /*define margin*/
@@ -155,11 +157,10 @@ struct vertex_coord
 	CvPoint right_bottom_vertex;
 };
 
-/** adjacent verticle */
-struct adjacent_matched_features
+struct matched_feature_pair
 {
-	CvPoint ref;
-	CvPoint cur;
+	CvPoint cur_coord;
+	CvPoint ref_coord;
 };
 
 /** holds feature data relevant to detection */
@@ -237,8 +238,9 @@ private:
 	bool MosaicFrame( IplImage* pFrame, CvRect &rectPosition, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum );
 	IplImage** DivideImage( IplImage* pImage, int iPartitionNum, int* iCornerFlag );
 	void UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama );
+	void AddAdjacentVerticlePairToVector( vector<matched_feature_pair>& vBlockMatchedVerticlePairs, CvPoint ptCur, CvPoint ptRef );
 
-	int FinMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
+	int FindMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
 	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );
 
 	/*********************** Functions prototyped in opensift **********************/
