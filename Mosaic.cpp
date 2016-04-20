@@ -132,7 +132,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 	iCornerFlag = (int *)calloc( 4, sizeof(int) );
 	pImagePartitions = DivideImage( pFrame, iPartitionNum, iCornerFlag );
 
-	vector<matched_feature_pair> vBlockMatchedVerticlePairs;
+	vector<matched_feature_pair> vMatchedVertexPairs;
 
 	for ( int i = 0; i < iPartitionNum; i++ )
 	{
@@ -150,6 +150,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		int iFeature1Num = sift_features( pImagePartitions[i], &feat1 );
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
 		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
 		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n );
 
 		// stick frame
@@ -185,14 +186,14 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 						if ( x == 0 )
 							ptCur.x = x + iXOffset;
 						else
-							ptCur.x = x + iXOffset + 1;
+							ptCur.x = x + 1 + iXOffset; // remove the one pixel error between two adjacent partition
 						if ( y == 0 )
 							ptCur.y = y + iYOffset;
 						else
-							ptCur.y = y + iYOffset + 1;
+							ptCur.y = y + 1 + iYOffset; // remove the one pixel error between two adjacent partition
 						ptRef.x = iXInRef;
 						ptRef.y = iYInRef;
-						AddAdjacentVerticlePairToVector( vBlockMatchedVerticlePairs, ptCur, ptRef );
+						AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
 					}
 				}
 			}
@@ -245,9 +246,10 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		}
 	}
 
-// 	for ( int j = 0; j < vBlockMatchedVerticlePairs.size(); j++ )
+// 	// display the partition vertex on ref
+// 	for ( int j = 0; j < vMatchedVertexPairs.size(); j++ )
 // 	{
-// 		cvCircle( pRefMosaicRegion, vBlockMatchedVerticlePairs[j].ref_coord, 5, CV_RGB(0,255,0), -1, 8, 0 );
+// 		cvCircle( pRefMosaicRegion, cvPoint( vMatchedVertexPairs[j].ref_coord.x, vMatchedVertexPairs[j].ref_coord.y ), 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 	}
 // 	cvShowImage( "pRefMosaicRegion", pRefMosaicRegion );
 // 	cvWaitKey( 0 );
@@ -286,10 +288,10 @@ IplImage** CMosaic::DivideImage( IplImage* pImage, int iPartitionNum, int* iCorn
 		iHeightPartitionNum = 2;
 		iPartitionWidth = pImage->width / iWidthPartitionNum;
 		iPartitionHeight = pImage->height / iHeightPartitionNum;
-		iCornerFlag[0] = 0;		//refers to lb corner
-		iCornerFlag[1] = 1;		//refers to lt corner
-		iCornerFlag[2] = 2;		//refers to rb corner
-		iCornerFlag[3] = 3;		//refers to rt corner
+		iCornerFlag[0] = 0;	//refers to lb corner
+		iCornerFlag[1] = 1;	//refers to lt corner
+		iCornerFlag[2] = 2;	//refers to rb corner
+		iCornerFlag[3] = 3;	//refers to rt corner
 	}
 
 	for ( int i = 0; i < iWidthPartitionNum; i++ )
@@ -313,6 +315,27 @@ IplImage** CMosaic::DivideImage( IplImage* pImage, int iPartitionNum, int* iCorn
 	}
 
 	return pDividedImages;
+}
+
+vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_feature_pair> vMatchedVertexPairs, int iXOffset, int iYOffset, int iPartionWidth, int iPartitionHeight )
+{
+	vector<matched_feature_pair> _mfp;
+	for ( int i = 0; i < vMatchedVertexPairs.size(); i++ )
+	{
+		if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
+		{
+			_mfp.push_back(vMatchedVertexPairs[i]);
+		}
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
+		{
+			_mfp.push_back(vMatchedVertexPairs[i]);
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight ) )
+		{
+			_mfp.push_back(vMatchedVertexPairs[i]);
+		}
+	}
+	return _mfp;
 }
 
 void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama )
@@ -367,10 +390,10 @@ void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrame
 	rectRefMosaicRegion.width = (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x) * 2;
 	rectRefMosaicRegion.height = (ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y) * 2;
 
-// 	cvCircle( pPanorama, vcLastFrameRegion->left_bottom_vertex, 5, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->right_bottom_vertex, 5, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->right_top_vertex, 5, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->left_top_vertex, 5, CV_RGB(0,255,0), -1, 8, 0 );
+// 	cvCircle( pPanorama, vcLastFrameRegion->left_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+// 	cvCircle( pPanorama, vcLastFrameRegion->right_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+// 	cvCircle( pPanorama, vcLastFrameRegion->right_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+// 	cvCircle( pPanorama, vcLastFrameRegion->left_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
 // 
 // 	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
 // 	// TODO: release
@@ -393,11 +416,11 @@ void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrame
 //  	cvReleaseImage( &pRefMosaicRegion );
 }
 
-void CMosaic::AddAdjacentVerticlePairToVector( vector<matched_feature_pair>& vBlockMatchedVerticlePairs, CvPoint ptCur, CvPoint ptRef )
+void CMosaic::AddMatchedVertexPairToVector( vector<matched_feature_pair>& vMatchedVertexPairs, CvPoint ptCur, CvPoint ptRef )
 {
-	for ( int i = 0; i < vBlockMatchedVerticlePairs.size(); i++ )
+	for ( int i = 0; i < vMatchedVertexPairs.size(); i++ )
 	{
-		if ( ( vBlockMatchedVerticlePairs[i].cur_coord.x == ptCur.x ) && ( vBlockMatchedVerticlePairs[i].cur_coord.y == ptCur.y ) )
+		if ( ( vMatchedVertexPairs[i].cur_coord.x == ptCur.x ) && ( vMatchedVertexPairs[i].cur_coord.y == ptCur.y ) )
 			return;
 	}
 	struct matched_feature_pair mfp;
@@ -405,13 +428,13 @@ void CMosaic::AddAdjacentVerticlePairToVector( vector<matched_feature_pair>& vBl
 	mfp.cur_coord.y = ptCur.y;
 	mfp.ref_coord.x = ptRef.x;
 	mfp.ref_coord.y = ptRef.y;
-	vBlockMatchedVerticlePairs.push_back( mfp );
+	vMatchedVertexPairs.push_back( mfp );
 }
 
 int CMosaic::FindMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num )
 {
 	int n, matchBest, matchBetter;
-	float ddf, ddfBest, ddfBetter;	
+	double ddf, ddfBest, ddfBetter;	
 
 	n = 0;
 	
@@ -1877,7 +1900,7 @@ iteration_end:
 		cvReleaseMat( &M );
 		release_mem( pts, mpts, consensus_max );
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
-		M = lsq_homog_with_adjacent_matched_features( pts, mpts, in );
+		M = lsq_homog( pts, mpts, in );
 		if( inliers )
 		{
 			*inliers = consensus;
@@ -2009,49 +2032,6 @@ CvMat* CMosaic::lsq_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n )
 		cvmSet( B, i, 0, mpts[i].x );
 		cvmSet( B, i+n, 0, mpts[i].y );
     }
-	cvSolve( A, B, &X, CV_SVD );
-	x[8] = 1.0;
-	X = cvMat( 3, 3, CV_64FC1, x );
-	cvConvert( &X, H );
-
-	cvReleaseMat( &A );
-	cvReleaseMat( &B );
-	return H;
-}
-
-CvMat* CMosaic::lsq_homog_with_adjacent_matched_features( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n )
-{
-	CvMat* H, * A, * B, X;
-	double x[9];
-	int i;
-
-	if( n < 4 )
-	{
-		fprintf( stderr, "Warning: too few points in lsq_homog(), %s line %d\n", __FILE__, __LINE__ );
-		return NULL;
-	}
-
-	/* set up matrices so we can unstack homography into X; AX = B */
-	A = cvCreateMat( 2*n, 8, CV_64FC1 );
-	B = cvCreateMat( 2*n, 1, CV_64FC1 );
-	X = cvMat( 8, 1, CV_64FC1, x );
-	H = cvCreateMat(3, 3, CV_64FC1);
-	cvZero( A );
-	for( i = 0; i < n; i++ )
-	{
-		cvmSet( A, i, 0, pts[i].x );
-		cvmSet( A, i+n, 3, pts[i].x );
-		cvmSet( A, i, 1, pts[i].y );
-		cvmSet( A, i+n, 4, pts[i].y );
-		cvmSet( A, i, 2, 1.0 );
-		cvmSet( A, i+n, 5, 1.0 );
-		cvmSet( A, i, 6, -pts[i].x * mpts[i].x );
-		cvmSet( A, i, 7, -pts[i].y * mpts[i].x );
-		cvmSet( A, i+n, 6, -pts[i].x * mpts[i].y );
-		cvmSet( A, i+n, 7, -pts[i].y * mpts[i].y );
-		cvmSet( B, i, 0, mpts[i].x );
-		cvmSet( B, i+n, 0, mpts[i].y );
-	}
 	cvSolve( A, B, &X, CV_SVD );
 	x[8] = 1.0;
 	X = cvMat( 3, 3, CV_64FC1, x );

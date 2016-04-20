@@ -159,8 +159,8 @@ struct vertex_coord
 
 struct matched_feature_pair
 {
-	CvPoint cur_coord;
-	CvPoint ref_coord;
+	CvPoint2D64f cur_coord;
+	CvPoint2D64f ref_coord;
 };
 
 /** holds feature data relevant to detection */
@@ -237,8 +237,9 @@ private:
 	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
 	bool MosaicFrame( IplImage* pFrame, CvRect &rectPosition, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum );
 	IplImage** DivideImage( IplImage* pImage, int iPartitionNum, int* iCornerFlag );
+	vector<matched_feature_pair> FindIncludedVetexPairs(  vector<matched_feature_pair> vMatchedVertexPairs, int iXOffset, int iYOffset, int iPartitionWidth, int iPartitionHeight );
 	void UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama );
-	void AddAdjacentVerticlePairToVector( vector<matched_feature_pair>& vBlockMatchedVerticlePairs, CvPoint ptCur, CvPoint ptRef );
+	void AddMatchedVertexPairToVector( vector<matched_feature_pair>& vMatchedVertexPairs, CvPoint ptCur, CvPoint ptRef );
 
 	int FindMatchedFeatures( struct feature* feat1, int iFeat1Num, struct feature* feat2, int iFeat2Num );
 	IplImage* DrawMatchedFeatures( IplImage* img1,  IplImage* img2, struct feature* feat, int iFeatNum );
@@ -297,7 +298,6 @@ private:
 	CvMat* ransac_xform( struct feature* features, int n, int mtype, int m, double p_badxform, double err_tol, struct feature*** inliers, int* n_in );
 	CvMat* dlt_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
 	CvMat* lsq_homog( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
-	CvMat* lsq_homog_with_adjacent_matched_features( CvPoint2D64f* pts, CvPoint2D64f* mpts, int n ); 
 	double homog_xfer_err( CvPoint2D64f pt, CvPoint2D64f mpt, CvMat* H );
 	CvPoint2D64f persp_xform_pt( CvPoint2D64f pt, CvMat* T );
 	struct feature* get_match( struct feature* feat, int mtype );
