@@ -281,4 +281,4 @@ $RECYCLE.BIN/
 *.lnk
 
 # Output
-Panorama/output/
+output/
