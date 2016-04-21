@@ -381,18 +381,23 @@ vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_fe
 	{
 		if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
-			_vmfp.push_back(vMatchedVertexPairs[i]);
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
 		}
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
-			_mfp.cur_coord.x -= 1;
+			_mfp.cur_coord.x = _mfp.cur_coord.x - 1 - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
 			_vmfp.push_back( _mfp );
 		} 
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
-			_mfp.cur_coord.y -= 1;
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y = _mfp.cur_coord.y - 1 - iYOffset;
 			_vmfp.push_back( _mfp );
 		}
 	}
