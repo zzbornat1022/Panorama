@@ -260,13 +260,13 @@ void CPanoramaDlg::OnOpenFile()
 		}
 	}
 
- 	// Save each frame to output
-	//char chTempOutputPath[255];
-	//for ( int i = 0; i < m_iMosaicFrameAmount; i++)
-	//{
-	//	sprintf( chTempOutputPath, "output/Images%d.jpg", i );
-	//	cvSaveImage( chTempOutputPath, m_pImages[i] );
-	//}
+//  	 Save each frame to output
+// 	char chTempOutputPath[255];
+// 	for ( int i = 0; i < m_iMosaicFrameAmount; i++)
+// 	{
+// 		sprintf( chTempOutputPath, "output/Images%d.jpg", i );
+// 		cvSaveImage( chTempOutputPath, m_pImages[i] );
+// 	}
 
 	// Show image in picture control
 	ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
