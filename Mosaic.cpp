@@ -153,7 +153,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
 		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
-		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 4.0, inliners, in_n, vAdjacentMatchedVertexPairs );
+		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
 
 		// stick frame
 		if ( matTransformation )
@@ -381,18 +381,23 @@ vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_fe
 	{
 		if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
-			_vmfp.push_back(vMatchedVertexPairs[i]);
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
 		}
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
-			_mfp.cur_coord.x -= 1;
+			_mfp.cur_coord.x = _mfp.cur_coord.x - 1 - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
 			_vmfp.push_back( _mfp );
 		} 
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
-			_mfp.cur_coord.y -= 1;
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y = _mfp.cur_coord.y - 1 - iYOffset;
 			_vmfp.push_back( _mfp );
 		}
 	}
@@ -609,7 +614,7 @@ int CMosaic::_sift_features( IplImage* img, struct feature** feat, int intvls,
 
 	/* build scale space pyramid; smallest dimension of top level is ~4 pixels */
 	init_img = create_init_img( img, img_dbl, sigma );
-	octvs = log( (double) ( MIN( init_img->width, init_img->height ) ) ) / log( (double) 2 ) - 2;
+	octvs = 2; // log( (double) ( MIN( init_img->width, init_img->height ) ) ) / log( (double) 2 ) - 2; // modified by wangyue
 	gauss_pyr = build_gauss_pyr( init_img, octvs, intvls, sigma );
 	dog_pyr = build_dog_pyr( gauss_pyr, octvs, intvls );
   
@@ -618,7 +623,7 @@ int CMosaic::_sift_features( IplImage* img, struct feature** feat, int intvls,
 	calc_feature_scales( features, sigma, intvls );
 	if( img_dbl )
 		adjust_for_img_dbl( features );
-	calc_feature_oris( features, gauss_pyr );
+	//calc_feature_oris( features, gauss_pyr ); // modified by wangyue
 	compute_descriptors( features, gauss_pyr, descr_width, descr_hist_bins );
 
 	/* sort features by decreasing scale and move from CvSeq to array */
@@ -1969,9 +1974,9 @@ iteration_end:
 		release_mem( pts, mpts, consensus_max );
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
 		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, pts, mpts, in );
-		if ( in > 10 + vAdjacentMatchedVertexPairs.size() )
+		if ( in > 20 )
 		{
-			in = 10 + vAdjacentMatchedVertexPairs.size();
+			in = 20;
 		}
 		M = lsq_homog( pts, mpts, in );
 		if( inliers )
