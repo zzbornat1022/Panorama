@@ -308,7 +308,7 @@ private:
 	double log_factorial( int n );
 	struct feature** draw_ransac_sample( struct feature** features, int n, int m );
 	void extract_corresp_pts( struct feature** features, int n, int mtype, CvPoint2D64f** pts, CvPoint2D64f** mpts );
-	void include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f* pts, CvPoint2D64f* mpts, int n );
+	void include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int n );
 	int find_consensus( struct feature**, int, int, CvMat*, double, struct feature*** );
 	void release_mem( CvPoint2D64f*, CvPoint2D64f*, struct feature** );
 };
