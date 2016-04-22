@@ -155,6 +155,20 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
 		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
 
+		// show matched pairs on partition and ref
+		// TODO: release
+		IplImage* pStackedImg = stack_imgs( pRefMosaicRegion, pImagePartitions[i] );
+		pStackedImg->origin = 1;
+		for ( int j = 0; j < vAdjacentMatchedVertexPairs.size(); j++ )
+		{
+			// TODO: get_matched_features
+			cvLine( pStackedImg, cvPoint( (int) ( vAdjacentMatchedVertexPairs[j].ref_coord.x ),  (int) ( vAdjacentMatchedVertexPairs[j].ref_coord.y ) ), cvPoint( ( (int) ( vAdjacentMatchedVertexPairs[j].cur_coord.x ) + pRefMosaicRegion->width),  (int) ( vAdjacentMatchedVertexPairs[j].cur_coord.y ) ), CV_RGB( 255, 255, 0 ), 1, 8, 0 );
+		}
+		char chTempOutputPath[255];
+		sprintf( chTempOutputPath, "output/Pano%d-%d.jpg", m_iMosaicFrameNo, i );
+		cvSaveImage( chTempOutputPath, pStackedImg);
+		cvReleaseImage( &pStackedImg );
+
 		// stick frame
 		if ( matTransformation )
 		{
@@ -268,6 +282,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 					else
 					{
 						tmpScalar = cvGet2D( pImagePartitions[i], iTempYInCur, iTempXInCur );
+						cvSet2D( pRefMosaicRegion, y, x, tmpScalar );
 						iXInPano = x + m_rectRefMosaicRegion.x;
 						iYInPano = y + m_rectRefMosaicRegion.y;
 						cvSet2D( pPanorama, iYInPano, iXInPano, tmpScalar );
