@@ -27,7 +27,7 @@ using namespace std;
 #define SIFT_CURV_THR 10
 
 /** double image size before pyramid construction? */
-#define SIFT_IMG_DBL 1
+#define SIFT_IMG_DBL 0
 
 /** default width of descriptor histogram array */
 #define SIFT_DESCR_WIDTH 4

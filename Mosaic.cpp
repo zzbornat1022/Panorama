@@ -153,7 +153,7 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
 		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
 		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
-		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 4.0, inliners, in_n, vAdjacentMatchedVertexPairs );
+		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
 
 		// stick frame
 		if ( matTransformation )
@@ -623,7 +623,7 @@ int CMosaic::_sift_features( IplImage* img, struct feature** feat, int intvls,
 	calc_feature_scales( features, sigma, intvls );
 	if( img_dbl )
 		adjust_for_img_dbl( features );
-	calc_feature_oris( features, gauss_pyr );
+	//calc_feature_oris( features, gauss_pyr );
 	compute_descriptors( features, gauss_pyr, descr_width, descr_hist_bins );
 
 	/* sort features by decreasing scale and move from CvSeq to array */
