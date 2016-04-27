@@ -2031,7 +2031,11 @@ iteration_end:
 		cvReleaseMat( &M );
 		release_mem( pts, mpts, consensus_max );
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
-		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, &pts, &mpts, in );
+		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, pts, mpts, in );
+		if ( in > 20 )
+		{
+			in = 20;
+		}
 		M = lsq_homog( pts, mpts, in );
 		if( inliers )
 		{
@@ -2418,29 +2422,12 @@ void CMosaic::extract_corresp_pts( struct feature** features, int n, int mtype, 
 	*mpts = _mpts;
 }
 
-void CMosaic::include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int n )
+void CMosaic::include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f* pts, CvPoint2D64f* mpts, int n )
 {
-	CvPoint2D64f* _pts = NULL;
-	CvPoint2D64f	* _mpts = NULL;
 	for ( int i = 0; i < vAdjacentMatchedVertexPairs.size(); i++ )
 	{
-		n++;
-		_pts = (CvPoint2D64f*) realloc ( *pts, n * sizeof(CvPoint2D64f) );
-		_mpts = (CvPoint2D64f*) realloc ( *mpts, n * sizeof(CvPoint2D64f) );
-		if ( ( _pts != NULL) && ( _mpts != NULL ) )
-		{
-			*pts = _pts;
-			*mpts = _mpts;
-			(*pts)[n-1] = vAdjacentMatchedVertexPairs[i].cur_coord;
-			(*mpts)[n-1] = vAdjacentMatchedVertexPairs[i].ref_coord;
-		}
-		else 
-		{
-			free ( *pts );
-			free ( *mpts );
-			AfxMessageBox ( _T("Error (re)allocating memory") );
-			exit (1);
-		}
+		pts[i] = vAdjacentMatchedVertexPairs[i].cur_coord;
+		mpts[i] = vAdjacentMatchedVertexPairs[i].ref_coord;
 	}
 }
 
