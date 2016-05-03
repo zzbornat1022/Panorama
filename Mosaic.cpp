@@ -2031,12 +2031,13 @@ iteration_end:
 		cvReleaseMat( &M );
 		release_mem( pts, mpts, consensus_max );
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
-		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, pts, mpts, in );
+		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, &pts, &mpts, in );
+		int exact_num = in;
 		if ( in > 20 )
-		{
-			in = 20;
-		}
-		M = lsq_homog( pts, mpts, in );
+			exact_num = 20;
+		if ( vAdjacentMatchedVertexPairs.size() == 5)
+			exact_num = 5;
+		M = lsq_homog( pts, mpts, exact_num );
 		if( inliers )
 		{
 			*inliers = consensus;
@@ -2422,13 +2423,32 @@ void CMosaic::extract_corresp_pts( struct feature** features, int n, int mtype, 
 	*mpts = _mpts;
 }
 
-void CMosaic::include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f* pts, CvPoint2D64f* mpts, int n )
+void CMosaic::include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int &n )
 {
-	for ( int i = 0; i < vAdjacentMatchedVertexPairs.size(); i++ )
+	int count = n + vAdjacentMatchedVertexPairs.size();
+	CvPoint2D64f* _pts, * _mpts;
+	_pts = (CvPoint2D64f*) calloc ( count, sizeof(CvPoint2D64f) );
+	_mpts = (CvPoint2D64f*) calloc ( count, sizeof(CvPoint2D64f) );
+
+	for ( int i = 0; i < vAdjacentMatchedVertexPairs.size(); i ++ )
 	{
-		pts[i] = vAdjacentMatchedVertexPairs[i].cur_coord;
-		mpts[i] = vAdjacentMatchedVertexPairs[i].ref_coord;
+		_pts[i] = vAdjacentMatchedVertexPairs[i].cur_coord;
+		_mpts[i] = vAdjacentMatchedVertexPairs[i].ref_coord;
 	}
+	for ( int i = vAdjacentMatchedVertexPairs.size(); i < count; i ++ )
+	{
+		_pts[i] = (*pts)[i - vAdjacentMatchedVertexPairs.size()];
+		_mpts[i] = (*mpts)[i - vAdjacentMatchedVertexPairs.size()];
+	}
+
+	free(*pts);
+	free(*mpts);
+	*pts = NULL;
+	*mpts = NULL;
+
+	*pts = _pts;
+	*mpts = _mpts;
+	n = count;
 }
 
 /*

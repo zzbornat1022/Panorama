@@ -72,7 +72,7 @@ BEGIN_MESSAGE_MAP(CPanoramaDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-	ON_COMMAND(ID_OPEN_FILE, &CPanoramaDlg::OnOpenFile)
+	ON_COMMAND(ID_OPEN_FILE, &CPanoramaDlg::OnOpenYUVFile)
 	ON_COMMAND(ID_EDIT_START_MOSAIC, &CPanoramaDlg::OnEditStartMosaic)
 	ON_COMMAND(ID_EXIT_APP, &CPanoramaDlg::OnExitApp)
 END_MESSAGE_MAP()
@@ -174,7 +174,7 @@ HCURSOR CPanoramaDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
-void CPanoramaDlg::OnOpenFile()
+void CPanoramaDlg::OnOpenYUVFile()
 {
 	// TODO: Add your command handler code here
 	TCHAR szFilters[]= _T("YUV Files (*.yuv)|*.yuv|");

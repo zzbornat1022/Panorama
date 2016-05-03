@@ -62,7 +62,7 @@ public:
 	CMosaic m_cMosaic;
 
 public:
-	afx_msg void OnOpenFile();
+	afx_msg void OnOpenYUVFile();
 	afx_msg void OnExitApp();
 	afx_msg void OnEditStartMosaic();
 

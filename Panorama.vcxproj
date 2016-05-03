@@ -47,8 +47,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\zzbor\Documents\OpenCV\2.3.1\build\include;C:\Users\zzbor\Documents\OpenCV\2.3.1\build\include\opencv;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\zzbor\Documents\OpenCV\2.3.1\build\x86\vc10\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\Qiuhao\Documents\OpenCV\2.3.1\build\include;C:\Users\Qiuhao\Documents\OpenCV\2.3.1\build\include\opencv;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\Qiuhao\Documents\OpenCV\2.3.1\build\x86\vc10\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -59,7 +59,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Users\zzbor\Documents\OpenCV\2.3.1\include;C:\Users\zzbor\Documents\OpenCV\2.3.1\include\opencv2;C:\Users\zzbor\Documents\OpenCV\2.3.1\include\opencv;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Qiuhao\Documents\OpenCV\2.3.1\include;C:\Users\Qiuhao\Documents\OpenCV\2.3.1\include\opencv2;C:\Users\Qiuhao\Documents\OpenCV\2.3.1\include\opencv;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <GlobalOptimizations>true</GlobalOptimizations>
@@ -78,7 +78,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\zzbor\Documents\OpenCV\2.3.1\build\x86\vc10\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\Qiuhao\Documents\OpenCV\2.3.1\build\x86\vc10\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opencv_calib3d231d.lib;opencv_contrib231d.lib;opencv_core231d.lib;opencv_features2d231d.lib;opencv_flann231d.lib;opencv_gpu231d.lib;opencv_haartraining_engined.lib;opencv_highgui231d.lib;opencv_imgproc231d.lib;opencv_legacy231d.lib;opencv_ml231d.lib;opencv_objdetect231d.lib;opencv_ts231d.lib;opencv_video231d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
