@@ -16,7 +16,7 @@ CMosaic::~CMosaic(void)
 {
 }
 
-IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth, int iFrameHeight, int iPanoramaWidth, int iPanoramaHeight )
+IplImage* CMosaic::MosaicVideo( IplImage** pImages, int iImageAmount, int iFrameWidth, int iFrameHeight, int iPanoramaWidth, int iPanoramaHeight )
 {
 	// Create Panorama IplImage
 	m_iPanoramaPreWidth = iPanoramaWidth * 2;
@@ -75,6 +75,34 @@ IplImage* CMosaic::Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth
 	return m_pPanorama;
 }
 
+IplImage* CMosaic::MosaicPics( IplImage** pImages, int iImageAmount, int iPanoramaWidth, int iPanoramaHeight )
+{
+	// Create Panorama IplImage
+	m_iPanoramaPreWidth = iPanoramaWidth * 2;
+	m_iPanoramaPreHeight = iPanoramaHeight * 2;
+	if ( CreatePanorama( &m_pPanorama, m_iPanoramaPreWidth, m_iPanoramaPreHeight ) == false )
+	{
+		AfxMessageBox( _T("Creating Background Failed") );
+		return NULL;
+	}
+
+	// Set panorama background color to black
+	SetBackgroundColor( m_pPanorama, 0 );
+
+	// Stick First Frame To Panorama; img->origin = 1 means origin point is at left bottom
+	m_ptFirstFrameLeftBottomVertex.x = (m_iPanoramaPreWidth - pImages[0]->width) / 2;
+	m_ptFirstFrameLeftBottomVertex.y = (m_iPanoramaPreHeight - pImages[0]->height) / 2;
+	StickFirstFrame( pImages[0], m_ptFirstFrameLeftBottomVertex, m_pPanorama );
+
+	for ( int i = 1; i < iImageAmount; i++ )
+		MosaicPic( pImages[i], m_rectRefMosaicRegion, m_pPanorama, m_rectCurrentPanoramaRegion, m_vcLastFrameRegion );
+
+	// set panorama roi
+	//cvSetImageROI( m_pPanorama, m_rectCurrentPanoramaRegion );
+
+	return m_pPanorama;
+}
+
 bool CMosaic::CreatePanorama( IplImage** pPanorama, int iWidth, int iHeight )
 {
 	if ( *pPanorama = cvCreateImage( cvSize( iWidth, iHeight ), IPL_DEPTH_8U, 3 ) )
@@ -98,7 +126,7 @@ void CMosaic::StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplIma
 	cvCopy( pFirstFrame, pPanorama );
 	cvResetImageROI(pPanorama); 
 
-	m_vcLastFrameRegion = (vertex_coord*) malloc  ( sizeof( struct vertex_coord ) );
+	m_vcLastFrameRegion = (vertex_coord*) malloc ( sizeof( struct vertex_coord ) );
 	m_vcLastFrameRegion->left_bottom_vertex.x = m_rectCurrentPanoramaRegion.x = m_ptFirstFrameLeftBottomVertex.x;
 	m_vcLastFrameRegion->left_bottom_vertex.y = m_rectCurrentPanoramaRegion.y = m_ptFirstFrameLeftBottomVertex.y;
 	m_vcLastFrameRegion->left_top_vertex.x = m_ptFirstFrameLeftBottomVertex.x;
@@ -151,12 +179,13 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 		matTransformationInvert = cvCreateMat(3,3,CV_64FC1);
 		feature*** inliners;
 		int* in_n;
+		vector<matched_feature_pair> vAdjacentMatchedVertexPairs;
 		inliners = (feature***) calloc( 1, sizeof( feature** ) );
 		in_n = (int*) calloc( 1, sizeof( int ) );
 		int iFeature1Num = sift_features( pImagePartitions[i], &feat1 );
 		int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
 		int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
-		vector<matched_feature_pair> vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
+		vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImagePartitions[i]->width, pImagePartitions[i]->height );
 		matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
 
 		// show matched pairs on partition and ref
@@ -371,6 +400,503 @@ bool CMosaic::MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplIma
 	return true;
 }
 
+bool CMosaic::MosaicPic( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion )
+{
+	// set panorama roi
+	cvSetImageROI( pPanorama, rectRefMosaicRegion );
+	// TODO: release
+	IplImage* pRefMosaicRegion = cvCreateImage( cvSize( rectRefMosaicRegion.width, rectRefMosaicRegion.height ), IPL_DEPTH_8U, 3 );
+	pRefMosaicRegion->origin = 1;
+	cvCopy( pPanorama, pRefMosaicRegion, 0 );
+	cvResetImageROI( pPanorama );
+
+	// divide pImages[1] to 3 parts
+	IplImage** pImage1Parts = DivideImageTo3Parts( pFrame );
+
+	// Temp way
+	int iXOffset, iYOffset;
+	vector<matched_feature_pair> vMatchedVertexPairs;
+
+	// mosaic middle part
+	iXOffset = 0;
+	iYOffset = pImage1Parts[0]->height;
+	// TODO: release
+	feature* feat1, * feat2;
+	CvMat* matTransformation;
+	CvMat* matTransformationInvert;
+	matTransformationInvert = cvCreateMat(3,3,CV_64FC1);
+	feature*** inliners;
+	int* in_n;
+	vector<matched_feature_pair> vAdjacentMatchedVertexPairs;
+	inliners = (feature***) calloc( 1, sizeof( feature** ) );
+	in_n = (int*) calloc( 1, sizeof( int ) );
+	int iFeature1Num = sift_features( pImage1Parts[1], &feat1 );
+	int iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
+	int iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImage1Parts[1]->width, pImage1Parts[1]->height );
+	matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
+
+	if ( matTransformation )
+	{
+		// calculate vertex in ref and collect matched vertex pair
+		double dbMatData[9];
+		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformation, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformation, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformation, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformation, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformation, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformation, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformation, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformation, 2, 2 );
+
+		int iTempXInCur, iTempYInCur;	// x, y in current partition
+		int iXInPano, iYInPano;
+		vertex_coord vcPartitionVertexInRef;
+		CvPoint ptCur, ptRef;	// point in current frame and ref
+		// calculate left bottom vertex
+		iTempXInCur = 0; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset - 1;
+		ptRef.x = vcPartitionVertexInRef.left_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = vcPartitionVertexInRef.left_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y -= 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		// calculate left top vertex
+		iTempXInCur = 0; iTempYInCur = pImage1Parts[1]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset + 1;
+		ptRef.x = vcPartitionVertexInRef.left_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = vcPartitionVertexInRef.left_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y += 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		// calculate right bottom vertex
+		iTempXInCur = pImage1Parts[1]->width - 1; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset - 1;
+		ptRef.x = vcPartitionVertexInRef.right_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = vcPartitionVertexInRef.right_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y -= 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		// calculate right top vertex
+		iTempXInCur = pImage1Parts[1]->width - 1; iTempYInCur = pImage1Parts[1]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset + 1;
+		ptRef.x = vcPartitionVertexInRef.right_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = vcPartitionVertexInRef.right_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y += 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+
+		// restore more point
+		iTempXInCur = pImage1Parts[1]->width/3; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset - 1;
+		ptRef.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y -= 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		iTempXInCur = pImage1Parts[1]->width*2/3; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset - 1;
+		ptRef.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y -= 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		iTempXInCur = pImage1Parts[1]->width/3; iTempYInCur = pImage1Parts[1]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset + 1;
+		ptRef.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y += 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+		iTempXInCur = pImage1Parts[1]->width*2/3; iTempYInCur = pImage1Parts[1]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset + 1;
+		ptRef.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		ptRef.y += 1;
+		AddMatchedVertexPairToVector( vMatchedVertexPairs, ptCur, ptRef );
+
+		// calculate the mosaic rectangle in ref
+		CvPoint ptLeftBottomVertexInRef, ptRightTopVertexInRef;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.x < vcPartitionVertexInRef.left_top_vertex.x )
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_bottom_vertex.x;
+		else
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.y < vcPartitionVertexInRef.right_bottom_vertex.y )
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.left_bottom_vertex.y;
+		else
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.right_bottom_vertex.y;
+		if ( vcPartitionVertexInRef.right_bottom_vertex.x > vcPartitionVertexInRef.right_top_vertex.x )
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_bottom_vertex.x;
+		else
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_top_vertex.y > vcPartitionVertexInRef.right_top_vertex.y )
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.left_top_vertex.y;
+		else
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.right_top_vertex.y;
+
+		// paste frame to panorama inversely
+		CvScalar tmpScalar;
+		cvInvert( matTransformation, matTransformationInvert, CV_LU );
+		dbMatData[0] = cvmGet( matTransformationInvert, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformationInvert, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformationInvert, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformationInvert, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformationInvert, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformationInvert, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformationInvert, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformationInvert, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformationInvert, 2, 2 );
+		for ( int x = ptLeftBottomVertexInRef.x; x <= ptRightTopVertexInRef.x; x++ )
+		{
+			for ( int y = ptLeftBottomVertexInRef.y; y < ptRightTopVertexInRef.y; y++ )
+			{
+				iTempXInCur = (int)((dbMatData[0] * x + dbMatData[1] * y + dbMatData[2]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				iTempYInCur = (int)((dbMatData[3] * x + dbMatData[4] * y + dbMatData[5]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				if ( iTempXInCur < 0 || iTempYInCur < 0 || iTempXInCur >= pImage1Parts[1]->width ||iTempYInCur >= pImage1Parts[1]->height )
+				{
+					continue;
+				}
+				else
+				{
+					tmpScalar = cvGet2D( pImage1Parts[1], iTempYInCur, iTempXInCur );
+					cvSet2D( pRefMosaicRegion, y, x, tmpScalar );
+					iXInPano = x + m_rectRefMosaicRegion.x;
+					iYInPano = y + m_rectRefMosaicRegion.y;
+					cvSet2D( m_pPanorama, iYInPano, iXInPano, tmpScalar );
+				}
+			}
+		}
+		cvSaveImage( "output/Ref.jpg", pRefMosaicRegion );
+		cvSaveImage( "output/Pano.jpg", m_pPanorama );
+
+		// release
+		cvReleaseMat( &matTransformation );
+		cvReleaseMat( &matTransformationInvert );
+		if ( feat1 != NULL )
+		{
+			free( feat1 );
+			feat1 = NULL;
+		}
+		if ( feat2 != NULL )
+		{
+			free( feat2 );
+			feat2 = NULL;
+		}
+		if ( inliners != NULL )
+		{
+			free( inliners );
+			inliners	=	NULL;
+		}
+		if ( in_n != NULL )
+		{
+			free( in_n );
+			in_n = NULL;
+		}
+	}
+
+	// mosaic bottom part
+	iXOffset = 0;
+	iYOffset = 0;
+	matTransformationInvert = cvCreateMat(3,3,CV_64FC1);
+	inliners = (feature***) calloc( 1, sizeof( feature** ) );
+	in_n = (int*) calloc( 1, sizeof( int ) );
+	iFeature1Num = sift_features( pImage1Parts[0], &feat1 );
+	iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
+	iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImage1Parts[0]->width, pImage1Parts[0]->height );
+	matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
+
+	if ( matTransformation )
+	{
+		// calculate vertex in ref and collect matched vertex pair
+		double dbMatData[9];
+		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformation, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformation, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformation, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformation, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformation, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformation, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformation, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformation, 2, 2 );
+
+		int iTempXInCur, iTempYInCur;	// x, y in current partition
+		int iXInPano, iYInPano;
+		vertex_coord vcPartitionVertexInRef;
+		CvPoint ptCur, ptRef;	// point in current frame and ref
+		// calculate left bottom vertex
+		iTempXInCur = 0; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.left_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.left_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate left top vertex
+		iTempXInCur = 0; iTempYInCur = pImage1Parts[0]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.left_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.left_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate right bottom vertex
+		iTempXInCur = pImage1Parts[0]->width - 1; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.right_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.right_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate right top vertex
+		iTempXInCur = pImage1Parts[0]->width - 1; iTempYInCur = pImage1Parts[0]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.right_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.right_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// update vcLastFrameRegion
+		vcLastFrameRegion->left_bottom_vertex.x = (int)((dbMatData[0] * 0 + dbMatData[1] * 0 + dbMatData[2]) / (dbMatData[6] * 0 + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+		vcLastFrameRegion->left_bottom_vertex.y = (int)((dbMatData[3] * 0 + dbMatData[4] * 0 + dbMatData[5]) / (dbMatData[6] * 0 + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+		vcLastFrameRegion->right_bottom_vertex.x = (int)((dbMatData[0] * pImage1Parts[0]->width + dbMatData[1] * 0 + dbMatData[2]) / (dbMatData[6] * pImage1Parts[0]->width + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+		vcLastFrameRegion->right_bottom_vertex.y = (int)((dbMatData[3] * pImage1Parts[0]->width + dbMatData[4] * 0 + dbMatData[5]) / (dbMatData[6] * pImage1Parts[0]->width + dbMatData[7] * 0 + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+		
+		// calculate the mosaic rectangle in ref
+		CvPoint ptLeftBottomVertexInRef, ptRightTopVertexInRef;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.x < vcPartitionVertexInRef.left_top_vertex.x )
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_bottom_vertex.x;
+		else
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.y < vcPartitionVertexInRef.right_bottom_vertex.y )
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.left_bottom_vertex.y;
+		else
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.right_bottom_vertex.y;
+		if ( vcPartitionVertexInRef.right_bottom_vertex.x > vcPartitionVertexInRef.right_top_vertex.x )
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_bottom_vertex.x;
+		else
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_top_vertex.y > vcPartitionVertexInRef.right_top_vertex.y )
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.left_top_vertex.y;
+		else
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.right_top_vertex.y;
+
+		// paste frame to panorama inversely
+		CvScalar tmpScalar;
+		cvInvert( matTransformation, matTransformationInvert, CV_LU );
+		dbMatData[0] = cvmGet( matTransformationInvert, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformationInvert, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformationInvert, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformationInvert, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformationInvert, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformationInvert, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformationInvert, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformationInvert, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformationInvert, 2, 2 );
+		for ( int x = ptLeftBottomVertexInRef.x; x <= ptRightTopVertexInRef.x; x++ )
+		{
+			for ( int y = ptLeftBottomVertexInRef.y; y < ptRightTopVertexInRef.y; y++ )
+			{
+				iTempXInCur = (int)((dbMatData[0] * x + dbMatData[1] * y + dbMatData[2]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				iTempYInCur = (int)((dbMatData[3] * x + dbMatData[4] * y + dbMatData[5]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				if ( iTempXInCur < 0 || iTempYInCur < 0 || iTempXInCur >= pImage1Parts[0]->width ||iTempYInCur >= pImage1Parts[0]->height )
+				{
+					continue;
+				}
+				else
+				{
+					tmpScalar = cvGet2D( pImage1Parts[0], iTempYInCur, iTempXInCur );
+					cvSet2D( pRefMosaicRegion, y, x, tmpScalar );
+					iXInPano = x + m_rectRefMosaicRegion.x;
+					iYInPano = y + m_rectRefMosaicRegion.y;
+					cvSet2D( m_pPanorama, iYInPano, iXInPano, tmpScalar );
+				}
+			}
+		}
+		cvSaveImage( "output/Ref.jpg", pRefMosaicRegion );
+		cvSaveImage( "output/Pano.jpg", m_pPanorama );
+
+		// release
+		cvReleaseMat( &matTransformation );
+		cvReleaseMat( &matTransformationInvert );
+		if ( feat1 != NULL )
+		{
+			free( feat1 );
+			feat1 = NULL;
+		}
+		if ( feat2 != NULL )
+		{
+			free( feat2 );
+			feat2 = NULL;
+		}
+		if ( inliners != NULL )
+		{
+			free( inliners );
+			inliners	=	NULL;
+		}
+		if ( in_n != NULL )
+		{
+			free( in_n );
+			in_n = NULL;
+		}
+	}
+
+	// mosaic top part
+	iXOffset = 0;
+	iYOffset = pImage1Parts[0]->height + pImage1Parts[1]->height;;
+	matTransformationInvert = cvCreateMat(3,3,CV_64FC1);
+	inliners = (feature***) calloc( 1, sizeof( feature** ) );
+	in_n = (int*) calloc( 1, sizeof( int ) );
+	iFeature1Num = sift_features( pImage1Parts[2], &feat1 );
+	iFeature2Num = sift_features( pRefMosaicRegion, &feat2 );
+	iMatchedFeaturesNum = FindMatchedFeatures( feat1, iFeature1Num, feat2, iFeature2Num );
+	vAdjacentMatchedVertexPairs = FindIncludedVetexPairs( vMatchedVertexPairs, iXOffset, iYOffset, pImage1Parts[2]->width, pImage1Parts[2]->height );
+	matTransformation = ransac_xform( feat1, iFeature1Num, FEATURE_FWD_MATCH, 4, 0.01, 3.0, inliners, in_n, vAdjacentMatchedVertexPairs );
+
+	if ( matTransformation )
+	{
+		// calculate vertex in ref and collect matched vertex pair
+		double dbMatData[9];
+		dbMatData[0] = cvmGet( matTransformation, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformation, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformation, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformation, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformation, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformation, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformation, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformation, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformation, 2, 2 );
+
+		int iTempXInCur, iTempYInCur;	// x, y in current partition
+		int iXInPano, iYInPano;
+		vertex_coord vcPartitionVertexInRef;
+		CvPoint ptCur, ptRef;	// point in current frame and ref
+		// calculate left bottom vertex
+		iTempXInCur = 0; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.left_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.left_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate left top vertex
+		iTempXInCur = 0; iTempYInCur = pImage1Parts[2]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.left_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.left_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate right bottom vertex
+		iTempXInCur = pImage1Parts[2]->width - 1; iTempYInCur = 0;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.right_bottom_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.right_bottom_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// calculate right top vertex
+		iTempXInCur = pImage1Parts[2]->width - 1; iTempYInCur = pImage1Parts[2]->height - 1;
+		ptCur.x = iTempXInCur + iXOffset;
+		ptCur.y = iTempYInCur + iYOffset;
+		vcPartitionVertexInRef.right_top_vertex.x = (int)((dbMatData[0] * iTempXInCur + dbMatData[1] * iTempYInCur + dbMatData[2]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+		vcPartitionVertexInRef.right_top_vertex.y = (int)((dbMatData[3] * iTempXInCur + dbMatData[4] * iTempYInCur + dbMatData[5]) / (dbMatData[6] * iTempXInCur + dbMatData[7] * iTempYInCur + dbMatData[8]) + 0.5);
+
+		// update vcLastFrameRegion
+		vcLastFrameRegion->left_top_vertex.x = (int)((dbMatData[0] * 0 + dbMatData[1] * pImage1Parts[2]->height + dbMatData[2]) / (dbMatData[6] * 0 + dbMatData[7] * pImage1Parts[2]->height + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+		vcLastFrameRegion->left_top_vertex.y = (int)((dbMatData[3] * 0 + dbMatData[4] * pImage1Parts[2]->height + dbMatData[5]) / (dbMatData[6] * 0 + dbMatData[7] * pImage1Parts[2]->height + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+		vcLastFrameRegion->right_top_vertex.x = (int)((dbMatData[0] * pImage1Parts[2]->width + dbMatData[1] * pImage1Parts[2]->height + dbMatData[2]) / (dbMatData[6] * pImage1Parts[2]->width + dbMatData[7] * pImage1Parts[2]->height + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.x;
+		vcLastFrameRegion->right_top_vertex.y = (int)((dbMatData[3] * pImage1Parts[2]->width + dbMatData[4] * pImage1Parts[2]->height + dbMatData[5]) / (dbMatData[6] * pImage1Parts[2]->width + dbMatData[7] * pImage1Parts[2]->height + dbMatData[8]) + 0.5) + m_rectRefMosaicRegion.y;
+
+		// calculate the mosaic rectangle in ref
+		CvPoint ptLeftBottomVertexInRef, ptRightTopVertexInRef;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.x < vcPartitionVertexInRef.left_top_vertex.x )
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_bottom_vertex.x;
+		else
+			ptLeftBottomVertexInRef.x = vcPartitionVertexInRef.left_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_bottom_vertex.y < vcPartitionVertexInRef.right_bottom_vertex.y )
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.left_bottom_vertex.y;
+		else
+			ptLeftBottomVertexInRef.y = vcPartitionVertexInRef.right_bottom_vertex.y;
+		if ( vcPartitionVertexInRef.right_bottom_vertex.x > vcPartitionVertexInRef.right_top_vertex.x )
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_bottom_vertex.x;
+		else
+			ptRightTopVertexInRef.x = vcPartitionVertexInRef.right_top_vertex.x;
+		if ( vcPartitionVertexInRef.left_top_vertex.y > vcPartitionVertexInRef.right_top_vertex.y )
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.left_top_vertex.y;
+		else
+			ptRightTopVertexInRef.y = vcPartitionVertexInRef.right_top_vertex.y;
+
+		// paste frame to panorama inversely
+		CvScalar tmpScalar;
+		cvInvert( matTransformation, matTransformationInvert, CV_LU );
+		dbMatData[0] = cvmGet( matTransformationInvert, 0, 0 );
+		dbMatData[1] = cvmGet( matTransformationInvert, 0, 1 );
+		dbMatData[2] = cvmGet( matTransformationInvert, 0, 2 );
+		dbMatData[3] = cvmGet( matTransformationInvert, 1, 0 );
+		dbMatData[4] = cvmGet( matTransformationInvert, 1, 1 );
+		dbMatData[5] = cvmGet( matTransformationInvert, 1, 2 );
+		dbMatData[6] = cvmGet( matTransformationInvert, 2, 0 );
+		dbMatData[7] = cvmGet( matTransformationInvert, 2, 1 );
+		dbMatData[8] = cvmGet( matTransformationInvert, 2, 2 );
+		for ( int x = ptLeftBottomVertexInRef.x; x <= ptRightTopVertexInRef.x; x++ )
+		{
+			for ( int y = ptLeftBottomVertexInRef.y; y < ptRightTopVertexInRef.y; y++ )
+			{
+				iTempXInCur = (int)((dbMatData[0] * x + dbMatData[1] * y + dbMatData[2]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				iTempYInCur = (int)((dbMatData[3] * x + dbMatData[4] * y + dbMatData[5]) / (dbMatData[6] * x + dbMatData[7] * y + dbMatData[8]) + 0.5);
+				if ( iTempXInCur < 0 || iTempYInCur < 0 || iTempXInCur >= pImage1Parts[2]->width ||iTempYInCur >= pImage1Parts[2]->height )
+				{
+					continue;
+				}
+				else
+				{
+					tmpScalar = cvGet2D( pImage1Parts[2], iTempYInCur, iTempXInCur );
+					cvSet2D( pRefMosaicRegion, y, x, tmpScalar );
+					iXInPano = x + m_rectRefMosaicRegion.x;
+					iYInPano = y + m_rectRefMosaicRegion.y;
+					cvSet2D( m_pPanorama, iYInPano, iXInPano, tmpScalar );
+				}
+			}
+		}
+		cvSaveImage( "output/Ref.jpg", pRefMosaicRegion );
+		cvSaveImage( "output/Pano.jpg", m_pPanorama );
+
+		// release
+		cvReleaseMat( &matTransformation );
+		cvReleaseMat( &matTransformationInvert );
+		if ( feat1 != NULL )
+		{
+			free( feat1 );
+			feat1 = NULL;
+		}
+		if ( feat2 != NULL )
+		{
+			free( feat2 );
+			feat2 = NULL;
+		}
+		if ( inliners != NULL )
+		{
+			free( inliners );
+			inliners	=	NULL;
+		}
+		if ( in_n != NULL )
+		{
+			free( in_n );
+			in_n = NULL;
+		}
+	}
+
+	cvReleaseImage( &pImage1Parts[0] );
+	cvReleaseImage( &pImage1Parts[1] );
+	cvReleaseImage( &pImage1Parts[2] );
+	cvReleaseImage( &pRefMosaicRegion );
+	if ( pImage1Parts != NULL )
+	{
+		free( pImage1Parts );
+		pImage1Parts = NULL;
+	}
+
+	UpdatePanoramaAndRefMosaicRegion( vcLastFrameRegion, rectRefMosaicRegion, rectCurrentPanoramaRegion, pPanorama );
+
+	return true;
+}
+
 // TODO: change iPartition to row and column
 IplImage** CMosaic::DivideImage( IplImage* pImage, int iPartitionNum, int* iCornerFlag )
 {
@@ -437,13 +963,6 @@ vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_fe
 			_mfp.cur_coord.y -= iYOffset;
 			_vmfp.push_back( _mfp );
 		} 
-		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth / 2 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
-		{
-			_mfp = vMatchedVertexPairs[i];
-			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
-			_mfp.cur_coord.y -= iYOffset;
-			_vmfp.push_back( _mfp );
-		} 
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight - 1 ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
@@ -451,7 +970,63 @@ vector<matched_feature_pair> CMosaic::FindIncludedVetexPairs(  vector<matched_fe
 			_mfp.cur_coord.y = _mfp.cur_coord.y - iYOffset;
 			_vmfp.push_back( _mfp );
 		}
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth - 1 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight - 1 ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y = _mfp.cur_coord.y - iYOffset;
+			_vmfp.push_back( _mfp );
+		}
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth / 3 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth * 2 / 3 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth / 3 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight - 1 ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth * 2 / 3 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight - 1 ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth / 2 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
 		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight / 2 ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x -= iXOffset;
+			_mfp.cur_coord.y = _mfp.cur_coord.y - iYOffset;
+			_vmfp.push_back( _mfp );
+		}
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth / 2 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight - 1 ) )
+		{
+			_mfp = vMatchedVertexPairs[i];
+			_mfp.cur_coord.x = _mfp.cur_coord.x - iXOffset;
+			_mfp.cur_coord.y -= iYOffset;
+			_vmfp.push_back( _mfp );
+		} 
+		else if ( ( (int)vMatchedVertexPairs[i].cur_coord.x == iXOffset + iPartionWidth - 1 ) && ( (int)vMatchedVertexPairs[i].cur_coord.y == iYOffset + iPartitionHeight / 2 ) )
 		{
 			_mfp = vMatchedVertexPairs[i];
 			_mfp.cur_coord.x -= iXOffset;
@@ -509,42 +1084,44 @@ void CMosaic::UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrame
 	rectCurrentPanoramaRegion.height = iTopMax - rectCurrentPanoramaRegion.y;
 
 	// update rectRefMosaicRegion
-	rectRefMosaicRegion.x = ptLastFrameLeftBottomVertex.x - (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x) / 2;
-	rectRefMosaicRegion.y = ptLastFrameLeftBottomVertex.y - (ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y) / 2;
-	rectRefMosaicRegion.width = (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x) * 2;
+	rectRefMosaicRegion.x = ptLastFrameLeftBottomVertex.x - (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x);
+	rectRefMosaicRegion.y = ptLastFrameLeftBottomVertex.y - (ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y) * 0.5;
+	rectRefMosaicRegion.width = (ptLastFrameRightTopVertex.x - ptLastFrameLeftBottomVertex.x) * 3;
 	rectRefMosaicRegion.height = (ptLastFrameRightTopVertex.y - ptLastFrameLeftBottomVertex.y) * 2;
 
-	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
-	char chTempOutputPath[255];
-	sprintf( chTempOutputPath, "output/Pano%d.jpg", m_iMosaicFrameNo );
-	m_iMosaicFrameNo++;
-	cvSaveImage( chTempOutputPath, pPanorama);
-	cvResetImageROI( pPanorama );
+	//cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
+	//char chTempOutputPath[255];
+	//sprintf( chTempOutputPath, "output/Pano%d.jpg", m_iMosaicFrameNo );
+	//m_iMosaicFrameNo++;
+	//cvSaveImage( chTempOutputPath, pPanorama);
+	//cvResetImageROI( pPanorama );
 
-// 	cvCircle( pPanorama, vcLastFrameRegion->left_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->right_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->right_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
-// 	cvCircle( pPanorama, vcLastFrameRegion->left_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
-// 
-//  	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
-//  	// TODO: release
-//  	IplImage* pCurrentPanoramaRegion = cvCreateImage( cvSize( rectCurrentPanoramaRegion.width, rectCurrentPanoramaRegion.height ), IPL_DEPTH_8U, 3 );
-//  	pCurrentPanoramaRegion->origin = 1;
-//  	cvCopy( pPanorama, pCurrentPanoramaRegion, 0 );
-//  	cvResetImageROI( pPanorama );
-//  	cvShowImage( "CurrentPanorama", pCurrentPanoramaRegion);
-//  	cvWaitKey( 0 );
-//  	cvReleaseImage( &pCurrentPanoramaRegion );
-// 
-//  	cvSetImageROI( pPanorama, rectRefMosaicRegion );
-//  	// TODO: release
-//  	IplImage* pRefMosaicRegion = cvCreateImage( cvSize( rectRefMosaicRegion.width, rectRefMosaicRegion.height ), IPL_DEPTH_8U, 3 );
-//  	pRefMosaicRegion->origin = 1;
-//  	cvCopy( pPanorama, pRefMosaicRegion, 0 );
-//  	cvResetImageROI( pPanorama );
-//  	cvShowImage( "RefMosaic", pRefMosaicRegion);
-//  	cvWaitKey( 0 );
-//  	cvReleaseImage( &pRefMosaicRegion );
+	cvCircle( pPanorama, vcLastFrameRegion->left_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+	cvCircle( pPanorama, vcLastFrameRegion->right_bottom_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+	cvCircle( pPanorama, vcLastFrameRegion->right_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+	cvCircle( pPanorama, vcLastFrameRegion->left_top_vertex, 3, CV_RGB(0,255,0), -1, 8, 0 );
+ 
+  	cvSetImageROI( pPanorama, rectCurrentPanoramaRegion );
+  	// TODO: release
+  	IplImage* pCurrentPanoramaRegion = cvCreateImage( cvSize( rectCurrentPanoramaRegion.width, rectCurrentPanoramaRegion.height ), IPL_DEPTH_8U, 3 );
+  	pCurrentPanoramaRegion->origin = 1;
+  	cvCopy( pPanorama, pCurrentPanoramaRegion, 0 );
+  	cvResetImageROI( pPanorama );
+	cvSaveImage( "output/CurrentPanorama.jpg", pCurrentPanoramaRegion);
+  	cvShowImage( "CurrentPanorama", pCurrentPanoramaRegion);
+  	cvWaitKey( 0 );
+  	cvReleaseImage( &pCurrentPanoramaRegion );
+ 
+  	cvSetImageROI( pPanorama, rectRefMosaicRegion );
+  	// TODO: release
+  	IplImage* pRefMosaicRegion = cvCreateImage( cvSize( rectRefMosaicRegion.width, rectRefMosaicRegion.height ), IPL_DEPTH_8U, 3 );
+  	pRefMosaicRegion->origin = 1;
+  	cvCopy( pPanorama, pRefMosaicRegion, 0 );
+  	cvResetImageROI( pPanorama );
+	cvSaveImage( "output/RefMosaic.jpg", pRefMosaicRegion);
+  	cvShowImage( "RefMosaic", pRefMosaicRegion);
+  	cvWaitKey( 0 );
+  	cvReleaseImage( &pRefMosaicRegion );
 }
 
 void CMosaic::AddMatchedVertexPairToVector( vector<matched_feature_pair>& vMatchedVertexPairs, CvPoint ptCur, CvPoint ptRef )
@@ -2033,10 +2610,15 @@ iteration_end:
 		extract_corresp_pts( consensus, in, mtype, &pts, &mpts );
 		include_additional_corresp_pts( vAdjacentMatchedVertexPairs, &pts, &mpts, in );
 		int exact_num = in;
-		if ( in > 20 )
-			exact_num = 20;
+		if ( vAdjacentMatchedVertexPairs.size() != 0 )
+		{
+			if ( exact_num > 10 )
+				exact_num = 10;
+		}
+		/*if ( in > 20 )
+		exact_num = 20;
 		if ( vAdjacentMatchedVertexPairs.size() == 5)
-			exact_num = 5;
+		exact_num = 5;*/
 		M = lsq_homog( pts, mpts, exact_num );
 		if( inliers )
 		{
@@ -2527,3 +3109,36 @@ void CMosaic::release_mem( CvPoint2D64f* pts1, CvPoint2D64f* pts2, struct featur
 		free( features );
 }
 
+/********** Temp Method **********/
+IplImage** CMosaic::DivideImageTo3Parts( IplImage* pImage )
+{
+	IplImage** pDividedImages = ( IplImage** ) calloc ( 3, sizeof(IplImage*) );
+	
+	for ( int i = 0; i < 3; i++ )
+	{
+		int iTempWidth, iTempHeight;
+		iTempWidth = pImage->width;
+		if ( i == 2)
+			iTempHeight = pImage->height / 3 + pImage->height % 3;
+		else
+			iTempHeight = pImage->height / 3;
+		
+		pDividedImages[i] = cvCreateImage( cvSize( iTempWidth, iTempHeight ), IPL_DEPTH_8U, 3 );
+		pDividedImages[i]->origin = 1;
+		
+		CvRect rectTemp;
+		rectTemp.x = 0;
+		rectTemp.y = 0;
+		for ( int j = 0; j < i ; j++)
+			rectTemp.y += pDividedImages[j]->height;
+		rectTemp.width = iTempWidth;
+		rectTemp.height = iTempHeight;
+
+		cvSetImageROI( pImage, rectTemp );
+		cvCopy( pImage, pDividedImages[i], 0 );
+		cvResetImageROI( pImage );
+	}
+
+	return pDividedImages;
+}
+/********** Temp Method **********/

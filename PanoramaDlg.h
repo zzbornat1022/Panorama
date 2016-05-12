@@ -40,6 +40,7 @@ public:
 	
 	// TODO: release
 	FILE* m_fileInputYUV;
+	int m_iInputType;
 	bool m_bFileIsOpen;
 
 	int m_iFrameNo;
@@ -48,7 +49,6 @@ public:
 	int m_iFrameHeight;
 	// TODO: release
 	CWnd* m_pWndPanorama;
-	// TODO: release
 	CvvImage m_cvvImg;
 	// TODO: release
 	IplImage** m_pImages;
@@ -63,11 +63,13 @@ public:
 
 public:
 	afx_msg void OnOpenYUVFile();
+	afx_msg void OnOpenPics();
 	afx_msg void OnExitApp();
 	afx_msg void OnEditStartMosaic();
 
 	// Convert YUV Frame to RGB
 	void ShowImgInControl( CWnd* pCWnd, IplImage* pImg );
 	void ConvertYUVToRGB(unsigned char* yuv, unsigned char* rgb, int width, int height);
-
+	IplImage* rotateImage(IplImage* img, int degree);
+	
 };

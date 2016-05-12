@@ -52,6 +52,7 @@ CPanoramaDlg::CPanoramaDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CPanoramaDlg::IDD, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	m_iInputType = 0;
 	m_bFileIsOpen = false;
 	m_iFrameNo = 0;
 	m_iFrameInterval = 1;
@@ -72,9 +73,10 @@ BEGIN_MESSAGE_MAP(CPanoramaDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-	ON_COMMAND(ID_OPEN_FILE, &CPanoramaDlg::OnOpenYUVFile)
+	ON_COMMAND(ID_OPEN_VIDEO, &CPanoramaDlg::OnOpenYUVFile)
 	ON_COMMAND(ID_EDIT_START_MOSAIC, &CPanoramaDlg::OnEditStartMosaic)
 	ON_COMMAND(ID_EXIT_APP, &CPanoramaDlg::OnExitApp)
+	ON_COMMAND(ID_OPEN_PICS, &CPanoramaDlg::OnOpenPics)
 END_MESSAGE_MAP()
 
 
@@ -178,12 +180,10 @@ void CPanoramaDlg::OnOpenYUVFile()
 {
 	// TODO: Add your command handler code here
 	TCHAR szFilters[]= _T("YUV Files (*.yuv)|*.yuv|");
-	CFileDialog fileDlg( TRUE, NULL, _T("*.yuv"), OFN_FILEMUSTEXIST | OFN_HIDEREADONLY, szFilters );
+	CFileDialog fileDlg( TRUE, NULL, _T("*.yuv"), OFN_FILEMUSTEXIST, szFilters );
 	CString csInputFilePath;
 	if( fileDlg.DoModal() == IDOK )
-	{
 		csInputFilePath = fileDlg.GetPathName();
-	}
 
 	if ( csInputFilePath !=  "" )
 	{
@@ -195,9 +195,7 @@ void CPanoramaDlg::OnOpenYUVFile()
 		m_bFileIsOpen = true;
 	}
 	else
-	{
 		return;
-	}
 
 	// TODO: width and height should not be fixed
 	m_iFrameWidth = 704;
@@ -254,7 +252,11 @@ void CPanoramaDlg::OnOpenYUVFile()
 		}
 		else
 		{
+			// Show image in picture control
+			ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
+
 			AfxMessageBox ( _T("Read Complete") );
+			m_iInputType = 1;
 			free( uchYUV );
 			break;
 		}
@@ -268,8 +270,53 @@ void CPanoramaDlg::OnOpenYUVFile()
 // 		cvSaveImage( chTempOutputPath, m_pImages[i] );
 // 	}
 
-	// Show image in picture control
-	ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
+	
+}
+
+void CPanoramaDlg::OnOpenPics()
+{
+	// TODO: 在此添加命令处理程序代码
+	TCHAR szFilters[]= _T("JPG Files (*.jpg; *.jpeg)|*.jpg;*.jpeg|");
+	CFileDialog fileDlg( TRUE, NULL, _T("*.jpg"), OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT, szFilters );
+	CString csInputFilePath;
+	if( fileDlg.DoModal() == IDOK )
+	{
+		POSITION posSelectedFile = fileDlg.GetStartPosition(); 
+		// TODO: release
+		IplImage** pMoreImages = NULL;
+
+		while ( posSelectedFile !=  NULL )
+		{
+			// Convert CString to const char
+			CStringA csTempInputFilePath( csInputFilePath );
+			csTempInputFilePath = fileDlg.GetNextPathName(posSelectedFile);
+			m_iMosaicFrameAmount++;
+
+			pMoreImages = (IplImage**) realloc ( m_pImages, m_iMosaicFrameAmount * sizeof(IplImage*) );
+			if ( pMoreImages != NULL )
+			{
+				//IplImage* pTempImage =  cvLoadImage( csTempInputFilePath, 1 );
+				//pTempImage->origin = 1;
+
+				m_pImages = pMoreImages;
+				//m_pImages[m_iMosaicFrameAmount-1] = rotateImage( pTempImage, 180 );
+				m_pImages[m_iMosaicFrameAmount-1] = cvLoadImage( csTempInputFilePath, 1 );
+				m_pImages[m_iMosaicFrameAmount-1]->origin = 1;
+				//cvReleaseImage( &pTempImage );
+			}
+			else 
+			{
+				free (m_pImages);
+				AfxMessageBox ( _T("Error (re)allocating memory") );
+				exit (1);
+			}
+		}
+		ShowImgInControl ( m_pWndPanorama, m_pImages[0] );
+		AfxMessageBox ( _T("Read Complete") );
+		m_iInputType = 2;
+	}
+	else
+		return;
 }
 
 void CPanoramaDlg::OnExitApp()
@@ -287,18 +334,28 @@ void CPanoramaDlg::OnExitApp()
 void CPanoramaDlg::OnEditStartMosaic()
 {
 	// TODO: Add your command handler code here
-	if ( m_pImages == NULL )
+	if ( m_iInputType == 0 )
 	{
-		AfxMessageBox( _T("Please Load Video First!"), MB_ICONINFORMATION );
+		AfxMessageBox( _T("Please Load File First!"), MB_ICONINFORMATION );
 		return;
 	}
+	else if( m_iInputType == 1 )
+	{
+		m_iPanoramaWidth = 3000;
+		m_iPanoramaHeight = 2000;
+		// TODO: Arrange the Mosaic seq
+		m_pPanorama = m_cMosaic.MosaicVideo( m_pImages, m_iMosaicFrameAmount, m_pImages[0]->width, m_pImages[0]->height, m_iPanoramaWidth, m_iPanoramaHeight );
+
+		ShowImgInControl( m_pWndPanorama, m_pPanorama );
+	}
+	else if( m_iInputType == 2 )
+	{
+		m_iPanoramaWidth = 3000;
+		m_iPanoramaHeight = 2000;
+		m_pPanorama = m_cMosaic.MosaicPics( m_pImages, m_iMosaicFrameAmount, m_iPanoramaWidth, m_iPanoramaHeight );
+		ShowImgInControl( m_pWndPanorama, m_pPanorama );
+	}
 	
-	m_iPanoramaWidth = 3000;
-	m_iPanoramaHeight = 2000;
-	// TODO: Arrange the Mosaic seq
-	m_pPanorama = m_cMosaic.Mosaic( m_pImages, m_iMosaicFrameAmount, m_pImages[0]->width, m_pImages[0]->height, m_iPanoramaWidth, m_iPanoramaHeight );
-	
-	ShowImgInControl( m_pWndPanorama, m_pPanorama );
 }
 
 void CPanoramaDlg::ShowImgInControl( CWnd* pCWnd, IplImage* pImg )
@@ -355,3 +412,42 @@ void CPanoramaDlg::ConvertYUVToRGB(unsigned char * yuv, unsigned char * rgb, int
 		}
 	}
 }
+
+IplImage* CPanoramaDlg::rotateImage(IplImage* img, int degree)
+{
+	double angle = degree  * CV_PI / 180.;
+	double a = sin(angle), b = cos(angle);
+	int width=img->width, height=img->height;
+	//旋转后的新图尺寸
+	int width_rotate= int(height * fabs(a) + width * fabs(b));
+	int height_rotate=int(width * fabs(a) + height * fabs(b));
+	IplImage* img_rotate = cvCreateImage(cvSize(width_rotate, height_rotate), img->depth, img->nChannels);
+	cvZero(img_rotate);
+	//保证原图可以任意角度旋转的最小尺寸
+	int tempLength = sqrt((double)width * width + (double)height *height) + 10;
+	int tempX = (tempLength + 1) / 2 - width / 2;
+	int tempY = (tempLength + 1) / 2 - height / 2;
+	IplImage* temp = cvCreateImage(cvSize(tempLength, tempLength), img->depth, img->nChannels);
+	cvZero(temp);
+	//将原图复制到临时图像tmp中心
+	cvSetImageROI(temp, cvRect(tempX, tempY, width, height));
+	cvCopy(img, temp, NULL);
+	cvResetImageROI(temp);
+	//旋转数组map
+	// [ m0  m1  m2 ] ===>  [ A11  A12   b1 ]
+	// [ m3  m4  m5 ] ===>  [ A21  A22   b2 ]
+	float m[6];
+	int w = temp->width;
+	int h = temp->height;
+	m[0] = b;
+	m[1] = a;
+	m[3] = -m[1];
+	m[4] = m[0];
+	// 将旋转中心移至图像中间
+	m[2] = w * 0.5f;
+	m[5] = h * 0.5f;
+	CvMat M = cvMat(2, 3, CV_32F, m);
+	cvGetQuadrangleSubPix(temp, img_rotate, &M);
+	cvReleaseImage(&temp);
+	return img_rotate;
+}    

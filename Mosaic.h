@@ -214,7 +214,8 @@ public:
 	CMosaic(void);
 	~CMosaic(void);
 
-	IplImage* Mosaic( IplImage** pImages, int iImageAmount, int iFrameWidth, int iFrameHeight, int iPanoramaWidth, int iPanoramaHeight );
+	IplImage* MosaicVideo( IplImage** pImages, int iImageAmount, int iFrameWidth, int iFrameHeight, int iPanoramaWidth, int iPanoramaHeight );
+	IplImage* MosaicPics( IplImage** pImages, int iImageAmount, int iPanoramaWidth, int iPanoramaHeight );
 
 private:
 
@@ -237,7 +238,8 @@ private:
 	bool CreatePanorama( IplImage** pBackground, int iWidth, int iHeight );
 	void SetBackgroundColor( IplImage* pImg, int iColor );
 	void StickFirstFrame( IplImage* pFirstFrame, CvPoint ptPosition, IplImage* pPanorama );
-	bool MosaicFrame( IplImage* pFrame, CvRect &rectPosition, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum );
+	bool MosaicFrame( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion, int iPartitionNum );
+	bool MosaicPic( IplImage* pFrame, CvRect &rectRefMosaicRegion, IplImage* pPanorama, CvRect &rectCurrentPanoramaRegion, struct vertex_coord* vcLastFrameRegion );
 	IplImage** DivideImage( IplImage* pImage, int iPartitionNum, int* iCornerFlag );
 	vector<matched_feature_pair> FindIncludedVetexPairs(  vector<matched_feature_pair> vMatchedVertexPairs, int iXOffset, int iYOffset, int iPartitionWidth, int iPartitionHeight );
 	void UpdatePanoramaAndRefMosaicRegion( struct vertex_coord* vcLastFrameRegion, CvRect &rectRefMosaicRegion, CvRect &rectCurrentPanoramaRegion, IplImage* pPanorama );
@@ -311,4 +313,8 @@ private:
 	void include_additional_corresp_pts( vector<matched_feature_pair> vAdjacentMatchedVertexPairs, CvPoint2D64f** pts, CvPoint2D64f** mpts, int &n );
 	int find_consensus( struct feature**, int, int, CvMat*, double, struct feature*** );
 	void release_mem( CvPoint2D64f*, CvPoint2D64f*, struct feature** );
+
+	/********** Temp Method **********/
+	IplImage** DivideImageTo3Parts( IplImage* pImage );
+	/********** Temp Method **********/
 };
